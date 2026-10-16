@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trouble Brewing Generator</title>
+<meta name="description" content="Storyteller tool that generates a legal Blood on the Clocktower: Trouble Brewing setup, with characters you can pin in or rule out.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23a6252c'/%3E%3Cpath d='M16 7v9l6 4' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Storyteller console. Desktop: controls + character picker left, sticky result sheet right. Phone: controls, result, picker. */
+:root{
+  --bg:#eef0f3; --surface:#ffffff; --sunk:#e4e7ec; --ink:#1b2130; --muted:#5b6475; --line:#d6dae2;
+  --good:#1f5fae; --good-soft:#e3ecf8; --evil:#a6252c; --evil-soft:#f7e4e5; --brass:#8a6a1f; --brass-soft:#f3ecd9;
+  --on-solid:#ffffff;
+  --display:"IM Fell English SC", "Iowan Old Style", Georgia, serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141c; --surface:#181d28; --sunk:#0d1017; --ink:#e4e7ee; --muted:#9aa3b5; --line:#2a3142;
+  --good:#7fb0ef; --good-soft:#1a2a42; --evil:#ef8a8f; --evil-soft:#3a1d22; --brass:#d6b25e; --brass-soft:#2e2717;
+  --on-solid:#0d1017; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141c; --surface:#181d28; --sunk:#0d1017; --ink:#e4e7ee; --muted:#9aa3b5; --line:#2a3142;
+  --good:#7fb0ef; --good-soft:#1a2a42; --evil:#ef8a8f; --evil-soft:#3a1d22; --brass:#d6b25e; --brass-soft:#2e2717;
+  --on-solid:#0d1017; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.app{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 56px;
+  display:grid;gap:20px;grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "controls" "picker" "result"}
+@media (min-width:1000px){.app{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-areas:"top top" "controls result" "picker result" ". result";grid-template-rows:auto auto auto 1fr;align-items:start}
+  .result{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));max-height:calc(100vh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow:auto}}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--good);outline-offset:2px}
+
+.top{grid-area:top;display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:8px 20px;border-bottom:1px solid var(--line);padding-bottom:14px}
+.top h1{font-family:var(--display);font-weight:400;font-size:clamp(1.9rem,5vw,2.6rem);line-height:1}
+.top .sub{color:var(--muted);font-size:.9rem}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--brass)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.controls{grid-area:controls;padding:18px;display:grid;gap:16px}
+.count-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.stepper button{width:40px;height:44px;border:0;background:var(--sunk);cursor:pointer;font-size:1.2rem}
+.stepper button:disabled{opacity:.4;cursor:default}
+.stepper output{min-width:3.2ch;text-align:center;font-family:var(--display);font-size:1.9rem;line-height:44px;font-variant-numeric:tabular-nums}
+.count-label{display:grid;gap:2px}
+.count-label b{font-size:.95rem}
+.count-label span{color:var(--muted);font-size:.82rem}
+#players{flex:1 1 180px;min-width:0;accent-color:var(--good)}
+.bar{display:flex;height:30px;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+.bar div{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.75rem;color:var(--on-solid);min-width:0;transition:flex-grow .2s}
+.b-tf{background:var(--good)} .b-os{background:color-mix(in srgb,var(--good) 55%,var(--bg))} .b-mn{background:color-mix(in srgb,var(--evil) 70%,var(--bg))} .b-dm{background:var(--evil)} .b-tr{background:var(--muted)}
+.bar-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.8rem;color:var(--muted)}
+.bar-legend b{color:var(--ink);font-variant-numeric:tabular-nums}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:9px 16px;cursor:pointer;font-weight:500;font-size:.9rem}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);padding:10px 22px;font-weight:600}
+.btn.primary:hover{background:color-mix(in srgb,var(--ink) 85%,var(--bg))}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{padding:4px 10px;font-size:.8rem;white-space:nowrap;flex:none}
+.link{border:0;background:none;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:.85rem}
+.errors{display:grid;gap:6px}
+.err{border-left:3px solid var(--evil);background:var(--evil-soft);padding:8px 12px;border-radius:0 4px 4px 0;font-size:.88rem}
+.notice{border-left:3px solid var(--brass);background:var(--brass-soft);padding:8px 12px;border-radius:0 4px 4px 0;font-size:.85rem}
+
+/* picker */
+.picker{grid-area:picker;display:grid;gap:14px;padding:6px 18px}
+.picker-head{display:grid;gap:4px}
+.picker-head h2{margin:0}
+.picker-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;padding:10px 0;cursor:pointer;text-align:left}
+.picker-toggle .title{font-family:var(--display);font-weight:400;font-size:1.5rem;line-height:1.1}
+.picker-toggle .state{display:flex;align-items:center;gap:10px;font-size:.82rem;color:var(--muted);font-family:var(--body)}
+.chev{width:12px;height:12px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s;flex:none}
+.picker-toggle[aria-expanded="false"] .chev{transform:rotate(-45deg)}
+.picker-help{color:var(--muted);font-size:.85rem;max-width:62ch}
+.picker-body{display:grid;gap:22px;padding-bottom:16px}
+.choice-summary{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:12px}
+.choice-summary .chip{font-size:.8rem}
+.chip.in-good{background:var(--good-soft);border-color:var(--good)} .chip.in-evil{background:var(--evil-soft);border-color:var(--evil)}
+.chip.out{text-decoration:line-through;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+.team{display:grid;gap:10px}
+.team-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.team-head h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+.budget{font-family:var(--mono);font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.budget.over{color:var(--evil);font-weight:500}
+.t-good{color:var(--good)} .t-evil{color:var(--evil)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:8px;align-content:start;min-width:0;transition:background .15s,border-color .15s}
+.tile .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tile .nm{font-family:var(--display);font-size:1.12rem;line-height:1.1}
+.tile .ab{font-size:.8rem;color:var(--muted);line-height:1.4}
+.tile[data-state="include"]{border-color:var(--good);background:var(--good-soft)}
+.tile.evil[data-state="include"]{border-color:var(--evil);background:var(--evil-soft)}
+.tile[data-state="exclude"]{background:var(--sunk)}
+.tile[data-state="exclude"] .nm{text-decoration:line-through;color:var(--muted)}
+.tile[data-state="exclude"] .ab{opacity:.6}
+.tile .flag{font-family:var(--mono);font-size:.68rem;color:var(--brass);letter-spacing:.02em}
+.seg3{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;flex:none}
+.seg3 button{border:0;background:transparent;padding:4px 9px;font-size:.74rem;cursor:pointer;color:var(--muted);font-weight:500}
+.seg3 button+button{border-left:1px solid var(--line)}
+.seg3 button[aria-pressed="true"][data-v="include"]{background:var(--good);color:var(--on-solid)}
+.evil .seg3 button[aria-pressed="true"][data-v="include"]{background:var(--evil)}
+.seg3 button[aria-pressed="true"][data-v="auto"]{background:var(--sunk);color:var(--ink)}
+.seg3 button[aria-pressed="true"][data-v="exclude"]{background:var(--muted);color:var(--surface)}
+.seg3 button:disabled{cursor:default}
+
+/* result */
+.result{grid-area:result;padding:20px;display:grid;gap:20px;align-content:start}
+.res-head{display:grid;gap:6px}
+.res-head h2{font-family:var(--display);font-weight:400;font-size:1.7rem;line-height:1.1}
+.summary{font-family:var(--mono);font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.stale{font-size:.82rem;color:var(--brass)}
+.block{display:grid;gap:8px}
+.block h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:600}
+.inplay{display:grid;gap:10px}
+.inplay .grp{display:grid;gap:4px}
+.inplay .grp-name{font-size:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.ch{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;padding:6px 0 6px 10px;border-left:3px solid var(--good)}
+.ch.evil{border-left-color:var(--evil)}
+.ch .nm{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.ch .nm b{font-family:var(--display);font-weight:400;font-size:1.1rem}
+.ch .ab{font-size:.8rem;color:var(--muted)}
+.pin{font-family:var(--mono);font-size:.66rem;padding:0 5px;border:1px solid currentColor;border-radius:3px;color:var(--brass)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);border-radius:4px;padding:3px 9px;font-size:.85rem;background:var(--bg)}
+.chip.good{border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
+.chip.evil{border-color:color-mix(in srgb,var(--evil) 45%,var(--line))}
+.chip.decoy{border-style:dashed;border-color:var(--brass)}
+.muted{color:var(--muted);font-size:.85rem}
+.prep{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.prep li{display:flex;gap:10px;justify-content:space-between;align-items:start;background:var(--bg);border-radius:5px;padding:8px 10px;font-size:.88rem}
+.prep li > span{min-width:0}
+.prep .who{font-weight:600}
+.prep .note{display:block;color:var(--muted);font-size:.78rem}
+.nights{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.nights ol{margin:0;padding-left:1.5em;display:grid;gap:4px;font-size:.86rem}
+.nights li::marker{font-family:var(--mono);font-size:.78em;color:var(--muted)}
+.nights .sys{color:var(--brass)}
+.nights .note{display:block;color:var(--muted);font-size:.76rem;line-height:1.35}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:6px;font-size:.88rem;z-index:20}
+textarea.copybox{width:100%;min-height:180px;font-family:var(--mono);font-size:.78rem;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:10px}
+footer{grid-column:1/-1;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:reduce){.bar div,.tile{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Storyteller tool · Trouble Brewing</span>
+      <h1>Trouble Brewing Generator</h1>
+    </div>
+    <p class="sub">Pick a player count, pin or ban characters, generate a legal setup.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Game size">
+    <div class="count-row">
+      <div class="stepper">
+        <button type="button" id="dec" aria-label="Fewer players">−</button>
+        <output id="pcount" aria-live="polite">8</output>
+        <button type="button" id="inc" aria-label="More players">+</button>
+      </div>
+      <div class="count-label"><b>Players</b><span id="count-hint">5–15, plus Travellers up to 20</span></div>
+      <input id="players" type="range" min="5" max="20" value="8" aria-label="Players">
+    </div>
+    <div class="bar" id="bar" role="img"></div>
+    <div class="bar-legend" id="legend"></div>
+    <div class="errors" id="errors" aria-live="polite"></div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="generate">Generate</button>
+      <button type="button" class="link" id="reset">Reset choices</button>
+      <span class="muted" id="choice-count"></span>
+    </div>
+  </section>
+
+  <section class="panel picker" aria-label="Characters">
+    <div class="picker-head">
+      <h2><button type="button" class="picker-toggle" id="picker-toggle" aria-expanded="true" aria-controls="picker-body">
+        <span class="title">Characters</span>
+        <span class="state"><span id="picker-state"></span><span class="chev" aria-hidden="true"></span></span>
+      </button></h2>
+    </div>
+    <div class="choice-summary" id="choice-summary" hidden></div>
+    <div class="picker-body" id="picker-body">
+      <p class="picker-help"><b>In</b> always appears. <b>Auto</b> may appear. <b>Out</b> never appears. Your choices are kept when you re-roll.</p>
+      <div id="teams" style="display:grid;gap:22px"></div>
+    </div>
+  </section>
+
+  <section class="panel result" id="result" aria-label="Generated setup" aria-live="polite"></section>
+
+  <footer>Unofficial fan tool. Blood on the Clocktower, its characters and ability text are © Steven Medway and The Pandemonium Institute.</footer>
+</div>
+
+<script>
+/*CORE-START*/
+var BOTC = (function () {
+  "use strict";
+
+  /* ---------- DATA ---------- */
+  const ROLES = [
+    { id: "washerwoman", name: "Washerwoman", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Townsfolk.", first: 20, firstNote: "Point to the TOWNSFOLK and WRONG players, then show the Townsfolk token.", reminders: ["Townsfolk", "Wrong"] },
+    { id: "librarian", name: "Librarian", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Outsider. (Or that zero are in play.)", first: 30, firstNote: "Point to the OUTSIDER and WRONG players, then show the Outsider token (or show 0).", reminders: ["Outsider", "Wrong"] },
+    { id: "investigator", name: "Investigator", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Minion.", first: 40, firstNote: "Point to the MINION and WRONG players, then show the Minion token.", reminders: ["Minion", "Wrong"] },
+    { id: "chef", name: "Chef", team: "townsfolk", ability: "You start knowing how many pairs of evil players there are.", first: 50, firstNote: "Show fingers for the number of adjacent evil pairs.", reminders: [] },
+    { id: "empath", name: "Empath", team: "townsfolk", ability: "Each night, you learn how many of your 2 alive neighbors are evil.", first: 60, other: 60, firstNote: "Show fingers (0, 1, 2) for evil alive neighbours.", otherNote: "Show fingers (0, 1, 2) for evil alive neighbours.", reminders: [] },
+    { id: "fortuneteller", name: "Fortune Teller", team: "townsfolk", ability: "Each night, choose 2 players: you learn if either is a Demon. There is a good player that registers as a Demon to you.", first: 70, other: 70, firstNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", otherNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", reminders: ["Red Herring"] },
+    { id: "undertaker", name: "Undertaker", team: "townsfolk", ability: "Each night*, you learn which character died by execution today.", other: 80, otherNote: "If someone was executed today, show their character token.", reminders: ["Executed"] },
+    { id: "monk", name: "Monk", team: "townsfolk", ability: "Each night*, choose a player (not yourself): they are safe from the Demon tonight.", other: 20, otherNote: "They point to a player (not themself). Mark them SAFE.", reminders: ["Safe"] },
+    { id: "ravenkeeper", name: "Ravenkeeper", team: "townsfolk", ability: "If you die at night, you are woken to choose a player: you learn their character.", other: 50, otherNote: "If they died tonight, they point to a player. Show that character token.", reminders: [] },
+    { id: "virgin", name: "Virgin", team: "townsfolk", ability: "The 1st time you are nominated, if the nominator is a Townsfolk, they are executed immediately.", reminders: ["No Ability"] },
+    { id: "slayer", name: "Slayer", team: "townsfolk", ability: "Once per game, during the day, publicly choose a player: if they are the Demon, they die.", reminders: ["No Ability"] },
+    { id: "soldier", name: "Soldier", team: "townsfolk", ability: "You are safe from the Demon.", reminders: [] },
+    { id: "mayor", name: "Mayor", team: "townsfolk", ability: "If only 3 players live & no execution occurs, your team wins. If you die at night, another player might die instead.", reminders: [] },
+    { id: "butler", name: "Butler", team: "outsider", ability: "Each night, choose a player (not yourself): tomorrow, you may only vote if they are voting too.", first: 80, other: 90, firstNote: "They point to a player. Mark them MASTER.", otherNote: "They point to a player. Mark them MASTER.", reminders: ["Master"] },
+    { id: "drunk", name: "Drunk", team: "outsider", ability: "You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.", reminders: ["Is the Drunk"], setup: true },
+    { id: "recluse", name: "Recluse", team: "outsider", ability: "You might register as evil & as a Minion or Demon, even if dead.", reminders: [] },
+    { id: "saint", name: "Saint", team: "outsider", ability: "If you die by execution, your team loses.", reminders: [] },
+    { id: "poisoner", name: "Poisoner", team: "minion", ability: "Each night, choose a player: they are poisoned tonight and tomorrow day.", first: 10, other: 10, firstNote: "They point to a player. Mark them POISONED.", otherNote: "They point to a player. Mark them POISONED.", reminders: ["Poisoned"] },
+    { id: "spy", name: "Spy", team: "minion", ability: "Each night, you see the Grimoire. You might register as good & as a Townsfolk or Outsider, even if dead.", first: 90, other: 100, firstNote: "Show the Grimoire for as long as they need.", otherNote: "Show the Grimoire for as long as they need.", reminders: [] },
+    { id: "scarletwoman", name: "Scarlet Woman", team: "minion", ability: "If there are 5 or more players alive & the Demon dies, you become the Demon. (Travellers don't count.)", other: 30, otherNote: "If she became the Demon today, show YOU ARE and the Imp token.", reminders: ["Is the Demon"] },
+    { id: "baron", name: "Baron", team: "minion", ability: "There are extra Outsiders in play. [+2 Outsiders]", reminders: [], setup: true },
+    { id: "imp", name: "Imp", team: "demon", ability: "Each night*, choose a player: they die. If you kill yourself this way, a Minion becomes the Imp.", other: 40, otherNote: "They point to a player, who dies. If they chose themself, wake a Minion and show YOU ARE and the Imp token.", reminders: ["Dead"] }
+  ];
+  const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
+  const TEAMS = ["townsfolk", "outsider", "minion", "demon"];
+  const TEAM_LABEL = { townsfolk: ["Townsfolk", "Townsfolk"], outsider: ["Outsider", "Outsiders"], minion: ["Minion", "Minions"], demon: ["Demon", "Demon"] };
+  const GOOD = t => t === "townsfolk" || t === "outsider";
+  // [Townsfolk, Outsiders, Minions] — Demon is always 1
+  const DIST = { 5: [3, 0, 1], 6: [3, 1, 1], 7: [5, 0, 1], 8: [5, 1, 1], 9: [5, 2, 1], 10: [7, 0, 2], 11: [7, 1, 2], 12: [7, 2, 2], 13: [9, 0, 3], 14: [9, 1, 3], 15: [9, 2, 3] };
+  const MIN_PLAYERS_FOR_MINIONS = { 1: 5, 2: 10, 3: 13 };
+  const SYS_FIRST = [
+    { id: "_minioninfo", label: "Minion info", order: 2, note: "Wake the Minions. Show THIS IS THE DEMON and point to the Demon.", min: 7 },
+    { id: "_demoninfo", label: "Demon info", order: 3, note: "Wake the Demon. Show THESE ARE YOUR MINIONS, then the 3 bluffs.", min: 7 }
+  ];
+
+  /* ---------- RNG ---------- */
+  function cryptoRng() {
+    const buf = new Uint32Array(1);
+    return function (n) {
+      const lim = Math.floor(0x100000000 / n) * n;
+      let x;
+      do { crypto.getRandomValues(buf); x = buf[0]; } while (x >= lim);
+      return x % n;
+    };
+  }
+  function seededRng(seed) {
+    let a = seed >>> 0;
+    return function (n) {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n);
+    };
+  }
+  function shuffle(arr, rng) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rng(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function sample(arr, k, rng) { return k <= 0 ? [] : shuffle(arr, rng).slice(0, k); }
+  function pick(arr, rng) { return arr.length ? arr[rng(arr.length)] : null; }
+
+  /* ---------- HELPERS ---------- */
+  function prefOf(cfg, id) { if (id === "imp") return "include"; const v = cfg.pref && cfg.pref[id]; return v === "include" || v === "exclude" ? v : "auto"; }
+  const plural = (n, team) => TEAM_LABEL[team][n === 1 ? 0 : 1];
+  const slots = (n, w) => `${n} ${w} slot${n === 1 ? "" : "s"}`;
+
+  /* ---------- ANALYZE (feasibility + conflict messages) ---------- */
+  function analyze(cfg) {
+    const players = Math.round(Number(cfg.players));
+    if (!(players >= 5 && players <= 20)) return { ok: false, errors: ["Choose between 5 and 20 players."] };
+    const real = Math.min(players, 15), travellers = players - real;
+    const [TF, OS, MN] = DIST[real];
+    const p = id => prefOf(cfg, id);
+    const ids = (team, f) => ROLES.filter(r => r.team === team && f(r.id)).map(r => r.id);
+    const inc = {}, nonEx = {};
+    for (const t of TEAMS) { inc[t] = ids(t, id => p(id) === "include"); nonEx[t] = ids(t, id => p(id) !== "exclude"); }
+    const bp = p("baron");
+    const states = bp === "include" ? [true] : bp === "exclude" ? [false] : [false, true];
+
+    function check(b) {
+      const e = [];
+      const tf = TF - (b ? 2 : 0), os = OS + (b ? 2 : 0);
+      const incMn = inc.minion.filter(x => x !== "baron").length + (b ? 1 : 0);
+      const availMn = nonEx.minion.filter(x => b || x !== "baron").length;
+      if (incMn > MN) e.push({ code: "mnOver", n: incMn, slots: MN });
+      else if (availMn < MN) e.push({ code: "mnShort", n: availMn, need: MN });
+      if (inc.townsfolk.length > tf) e.push({ code: "tfOver", n: inc.townsfolk.length, slots: tf, baron: b });
+      else if (nonEx.townsfolk.length < tf) e.push({ code: "tfShort", n: nonEx.townsfolk.length, need: tf });
+      const drunkOk = nonEx.townsfolk.length >= tf + 1;
+      if (inc.outsider.includes("drunk") && !drunkOk && nonEx.townsfolk.length >= tf) e.push({ code: "drunkDecoy" });
+      if (inc.outsider.length > os) e.push({ code: "osOver", n: inc.outsider.length, slots: os, baron: b });
+      else {
+        const availOs = nonEx.outsider.filter(x => drunkOk || x !== "drunk" || inc.outsider.includes("drunk")).length;
+        if (availOs < os) e.push({ code: "osShort", n: availOs, need: os, drunkBlocked: !drunkOk && nonEx.outsider.includes("drunk") });
+      }
+      return e;
+    }
+    const checks = states.map(b => ({ baron: b, errs: check(b) }));
+    const feasible = checks.filter(c => !c.errs.length).map(c => c.baron);
+
+    let errors = [];
+    if (!feasible.length) {
+      const msg = e => message(e, real, bp);
+      if (bp === "auto") {
+        const fe = checks[0].errs, te = checks[1].errs;
+        const over = fe.find(e => e.code === "osOver");
+        if (over && over.n <= OS + 2 && te.length) {
+          const why = te[0];
+          let reason;
+          if (why.code === "mnOver") reason = "but your included Minions already fill every Minion slot.";
+          else if (why.code === "tfOver") reason = `but that leaves ${slots(why.slots, "Townsfolk")} for your ${why.n} included Townsfolk.`;
+          else reason = "but: " + msg(why);
+          errors.push(`You included ${over.n} ${plural(over.n, "outsider")}, but ${real} players have ${slots(OS, "Outsider")}. The Baron (+2 Outsiders) would make room, ${reason}`);
+          fe.filter(e => e !== over).forEach(e => errors.push(msg(e)));
+        } else if (over && over.n > OS + 2) {
+          errors.push(msg({ code: "osOver", n: over.n, slots: OS + 2, baron: true }));
+          fe.filter(e => e !== over).forEach(e => errors.push(msg(e)));
+        } else fe.forEach(e => errors.push(msg(e)));
+      } else checks[0].errs.forEach(e => errors.push(msg(e)));
+      errors = [...new Set(errors)];
+    }
+    const forcedBaron = bp === "auto" && feasible.length === 1 && feasible[0] === true;
+    const baronPossible = feasible.includes(true);
+    return { ok: feasible.length > 0, errors, players, real, travellers, base: { tf: TF, os: OS, mn: MN }, feasible, forcedBaron, baronPossible, inc, nonEx };
+  }
+
+  function message(e, real, bp) {
+    switch (e.code) {
+      case "mnOver": {
+        const need = MIN_PLAYERS_FOR_MINIONS[e.n];
+        const fix = need ? `Raise the player count to ${need} or more, or remove ${e.n - e.slots === 1 ? "one" : "some"}.` : "Trouble Brewing never has more than 3 Minions; remove some.";
+        return `You included ${e.n} Minions, but ${real} players have ${slots(e.slots, "Minion")}. ${fix}`;
+      }
+      case "mnShort": return `Only ${e.n} ${plural(e.n, "minion")} left after exclusions; ${real} players need ${e.need}.`;
+      case "tfOver": return e.baron
+        ? `With the Baron, ${real} players have ${slots(e.slots, "Townsfolk")}, but you included ${e.n}. Remove some Townsfolk or the Baron.`
+        : `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Remove some or raise the player count.`;
+      case "tfShort": return `Only ${e.n} Townsfolk left after exclusions; this setup needs ${e.need}. Allow more Townsfolk.`;
+      case "drunkDecoy": return "The Drunk needs a Townsfolk that isn't in play to pose as, but your exclusions leave none spare. Allow another Townsfolk.";
+      case "osOver": return e.baron
+        ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")} even with the Baron. Remove some or change the player count.`
+        : (bp === "exclude" && e.n <= e.slots + 2
+          ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Allow the Baron (+2 Outsiders) or remove some.`
+          : `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Remove some or change the player count.`);
+      case "osShort": return e.drunkBlocked
+        ? `Only ${e.n} usable Outsiders left: the Drunk can't be used because every spare Townsfolk is excluded. Allow more characters.`
+        : `Only ${e.n} ${plural(e.n, "outsider")} left after exclusions; this setup needs ${e.need}. Allow more Outsiders.`;
+    }
+    return "This combination can't be generated.";
+  }
+
+  /* ---------- GENERATE ---------- */
+  function generate(cfg, rng) {
+    rng = rng || cryptoRng();
+    const a = analyze(cfg);
+    if (!a.ok) return { ok: false, errors: a.errors };
+    const p = id => prefOf(cfg, id);
+
+    // Minions (decides the Baron)
+    let minions = a.inc.minion.slice();
+    let mnPool = a.nonEx.minion.filter(id => !minions.includes(id));
+    if (a.feasible.length === 1) {
+      if (a.feasible[0] && !minions.includes("baron")) minions.push("baron");
+      mnPool = mnPool.filter(id => id !== "baron");
+    }
+    minions = minions.concat(sample(mnPool, a.base.mn - minions.length, rng));
+    const baron = minions.includes("baron");
+    const tf = a.base.tf - (baron ? 2 : 0), os = a.base.os + (baron ? 2 : 0);
+
+    // Outsiders
+    const drunkOk = a.nonEx.townsfolk.length >= tf + 1;
+    const osPool = a.nonEx.outsider.filter(id => !a.inc.outsider.includes(id) && (drunkOk || id !== "drunk"));
+    const outsiders = a.inc.outsider.concat(sample(osPool, os - a.inc.outsider.length, rng));
+
+    // Townsfolk
+    const tfPool = a.nonEx.townsfolk.filter(id => !a.inc.townsfolk.includes(id));
+    const townsfolk = a.inc.townsfolk.concat(sample(tfPool, tf - a.inc.townsfolk.length, rng));
+
+    // Drunk decoy
+    const decoy = outsiders.includes("drunk") ? pick(a.nonEx.townsfolk.filter(id => !townsfolk.includes(id)), rng) : null;
+
+    const order = (list) => list.slice().sort((x, y) => ROLES.indexOf(BY_ID[x]) - ROLES.indexOf(BY_ID[y]));
+    const setup = {
+      players: a.players, real: a.real, travellers: a.travellers, baron,
+      autoBaron: baron && p("baron") === "auto" && a.forcedBaron,
+      counts: { townsfolk: tf, outsider: os, minion: a.base.mn, demon: 1 },
+      townsfolk: order(townsfolk), outsiders: order(outsiders), minions: order(minions), demon: "imp",
+      decoy,
+      included: ROLES.filter(r => p(r.id) === "include").map(r => r.id)
+    };
+    setup.inPlay = [...setup.townsfolk, ...setup.outsiders, ...setup.minions, "imp"];
+    setup.bag = order([...setup.townsfolk, ...(decoy ? [decoy] : []), ...setup.outsiders.filter(id => id !== "drunk"), ...setup.minions, "imp"]);
+    setup.bluffs = pickBluffs(setup, rng);
+    setup.info = pickInfo(setup, rng);
+    setup.reminders = reminderList(setup);
+    setup.firstNight = nightOrder(setup, "first");
+    setup.otherNights = nightOrder(setup, "other");
+
+    const problems = checkSetup(setup, cfg);
+    if (problems.length) return { ok: false, errors: ["Internal check failed: " + problems.join("; ")], setup };
+    return { ok: true, setup };
+  }
+
+  function pickBluffs(setup, rng) {
+    if (setup.real < 7) return [];
+    const used = new Set([...setup.inPlay, setup.decoy].filter(Boolean));
+    const tf = shuffle(ROLES.filter(r => r.team === "townsfolk" && !used.has(r.id)).map(r => r.id), rng);
+    const os = shuffle(ROLES.filter(r => r.team === "outsider" && !used.has(r.id)).map(r => r.id), rng);
+    const out = tf.splice(0, 2).concat(os.splice(0, 1));
+    const rest = shuffle(tf.concat(os), rng);
+    while (out.length < 3 && rest.length) out.push(rest.pop());
+    return out;
+  }
+
+  /* ---------- FIRST-NIGHT PICKS (by character) ---------- */
+  const INFO_KEYS = { washerwoman: "townsfolk", librarian: "outsider", investigator: "minion" };
+  function infoSources(setup) {
+    // which info characters act on night 1, and whether it's the Drunk acting as them
+    const src = [];
+    for (const id of ["fortuneteller", "washerwoman", "librarian", "investigator"]) {
+      if (setup.inPlay.includes(id)) src.push({ key: id, drunk: false });
+      else if (setup.decoy === id) src.push({ key: id, drunk: true });
+    }
+    return src;
+  }
+  function pickOne(setup, key, drunk, rng) {
+    const self = drunk ? "drunk" : key;
+    if (key === "fortuneteller") {
+      const good = setup.inPlay.filter(id => GOOD(BY_ID[id].team));
+      return { key, drunk, redHerring: pick(good, rng) };
+    }
+    const type = INFO_KEYS[key];
+    const targets = setup.inPlay.filter(id => BY_ID[id].team === type && id !== self);
+    if (!targets.length) return { key, drunk, zero: type === "outsider", none: type !== "outsider" };
+    const target = pick(targets, rng);
+    const wrong = pick(setup.inPlay.filter(id => id !== self && id !== target), rng);
+    return { key, drunk, target, wrong };
+  }
+  function pickInfo(setup, rng) { return infoSources(setup).map(s => pickOne(setup, s.key, s.drunk, rng)); }
+  function repick(setup, key, rng) {
+    rng = rng || cryptoRng();
+    const i = setup.info.findIndex(x => x.key === key);
+    if (i < 0) return setup;
+    const info = setup.info.slice();
+    info[i] = pickOne(setup, key, info[i].drunk, rng);
+    return Object.assign({}, setup, { info });
+  }
+
+  function reminderList(setup) {
+    const out = [];
+    for (const id of [...setup.inPlay, setup.decoy].filter(Boolean)) {
+      const r = BY_ID[id];
+      if (r.reminders.length) out.push({ id, name: r.name, tokens: r.reminders, decoy: id === setup.decoy });
+    }
+    return out;
+  }
+
+  function nightOrder(setup, which) {
+    const key = which === "first" ? "first" : "other", noteKey = key + "Note";
+    const acting = [...setup.inPlay.filter(id => id !== "drunk"), ...(setup.decoy ? [setup.decoy] : [])];
+    const rows = acting.filter(id => BY_ID[id][key]).map(id => ({
+      id, order: BY_ID[id][key], note: BY_ID[id][noteKey],
+      label: id === setup.decoy ? `${BY_ID[id].name} (the Drunk)` : BY_ID[id].name, drunk: id === setup.decoy
+    }));
+    if (which === "first" && setup.real >= 7) SYS_FIRST.forEach(s => rows.push({ id: s.id, order: s.order, note: s.note, label: s.label, sys: true }));
+    rows.sort((x, y) => x.order - y.order);
+    return rows;
+  }
+
+  /* ---------- VALIDATE ---------- */
+  function checkSetup(s, cfg) {
+    const e = [];
+    const p = id => prefOf(cfg, id);
+    const [TF, OS, MN] = DIST[s.real];
+    const tf = TF - (s.baron ? 2 : 0), os = OS + (s.baron ? 2 : 0);
+    if (s.inPlay.length !== s.real) e.push("token count");
+    if (s.real !== Math.min(cfg.players, 15) || s.travellers !== cfg.players - s.real) e.push("travellers");
+    if (new Set(s.inPlay).size !== s.inPlay.length) e.push("duplicates");
+    const count = t => s.inPlay.filter(id => BY_ID[id].team === t).length;
+    if (count("demon") !== 1 || !s.inPlay.includes("imp")) e.push("demon");
+    if (count("townsfolk") !== tf || count("outsider") !== os || count("minion") !== MN) e.push("team counts");
+    if (s.baron !== s.inPlay.includes("baron")) e.push("baron flag");
+    for (const r of ROLES) {
+      if (p(r.id) === "include" && !s.inPlay.includes(r.id)) e.push("missing include " + r.id);
+      if (p(r.id) === "exclude" && s.inPlay.includes(r.id)) e.push("excluded in play " + r.id);
+    }
+    if (s.inPlay.includes("drunk")) {
+      if (!s.decoy || BY_ID[s.decoy].team !== "townsfolk" || s.inPlay.includes(s.decoy) || p(s.decoy) === "exclude") e.push("decoy");
+    } else if (s.decoy) e.push("decoy without drunk");
+    if (s.bag.length !== s.real || s.bag.includes("drunk") || (s.decoy && !s.bag.includes(s.decoy)) || new Set(s.bag).size !== s.bag.length) e.push("bag");
+    if (s.real >= 7) {
+      if (s.bluffs.length !== 3 || new Set(s.bluffs).size !== 3) e.push("bluff count");
+      for (const b of s.bluffs) if (!GOOD(BY_ID[b].team) || s.inPlay.includes(b) || b === s.decoy) e.push("bad bluff " + b);
+    } else if (s.bluffs.length) e.push("bluffs at <7");
+    for (const i of s.info) {
+      const self = i.drunk ? "drunk" : i.key;
+      if (i.key === "fortuneteller") {
+        if (!s.inPlay.includes(i.redHerring) || !GOOD(BY_ID[i.redHerring].team)) e.push("red herring");
+        continue;
+      }
+      const type = INFO_KEYS[i.key];
+      if (i.zero || i.none) {
+        if (s.inPlay.some(id => BY_ID[id].team === type && id !== self)) e.push("info zero " + i.key);
+        continue;
+      }
+      if (!s.inPlay.includes(i.target) || !s.inPlay.includes(i.wrong) || i.target === i.wrong || i.target === self || i.wrong === self || BY_ID[i.target].team !== type) e.push("info " + i.key);
+    }
+    return e;
+  }
+
+  /* ---------- FORMAT ---------- */
+  const nm = id => BY_ID[id].name;
+  function charLabel(s, id) { return id === "drunk" && s.decoy ? `Drunk (as ${nm(s.decoy)})` : nm(id); }
+  function infoLine(s, i) {
+    const who = i.drunk ? `${nm(i.key)} (the Drunk)` : nm(i.key);
+    if (i.key === "fortuneteller") return { who, text: `Red Herring: the ${charLabel(s, i.redHerring)} player`, note: i.drunk ? "The Drunk has no ability; answer however you like." : "Mark them RED HERRING. They register as the Demon to the Fortune Teller all game." };
+    if (i.zero) return { who, text: "Show 0: no Outsiders in play", note: i.drunk ? "The Drunk can be shown false info." : "" };
+    if (i.none) return { who, text: `No other ${TEAM_LABEL[INFO_KEYS[i.key]][0]} is in play`, note: "Only a Spy or Recluse registering could make this info true. Improvise or show false info." };
+    const show = i.target === "drunk" ? "Drunk" : nm(i.target);
+    return { who, text: `Point to the ${charLabel(s, i.target)} and ${charLabel(s, i.wrong)} players. Show ${show}.`, note: i.drunk ? "The Drunk can be shown false info instead." : "" };
+  }
+  function seatNotes(s) {
+    const out = [];
+    const acts = id => s.inPlay.includes(id) || s.decoy === id;
+    if (acts("chef")) out.push({ who: s.decoy === "chef" ? "Chef (the Drunk)" : "Chef", text: "Count adjacent evil pairs at the table.", note: "Depends on seating." });
+    if (acts("empath")) out.push({ who: s.decoy === "empath" ? "Empath (the Drunk)" : "Empath", text: "Count evil alive neighbours each night.", note: "Depends on seating." });
+    return out;
+  }
+  function toText(s) {
+    const L = [];
+    L.push(`Trouble Brewing · ${s.players} players${s.travellers ? ` (15 + ${s.travellers} Travellers)` : ""}`);
+    L.push(`${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${plural(s.counts.minion, "minion")} · 1 Demon${s.baron ? " (Baron: +2 Outsiders)" : ""}`);
+    L.push("");
+    L.push("IN PLAY");
+    L.push("Townsfolk: " + s.townsfolk.map(nm).join(", "));
+    L.push("Outsiders: " + (s.outsiders.length ? s.outsiders.map(id => charLabel(s, id)).join(", ") : "none"));
+    L.push("Minions: " + s.minions.map(nm).join(", "));
+    L.push("Demon: Imp");
+    L.push("");
+    L.push("PUT IN THE BAG: " + s.bag.map(nm).join(", "));
+    L.push("DEMON BLUFFS: " + (s.bluffs.length ? s.bluffs.map(nm).join(", ") : "none (5–6 players)"));
+    if (s.travellers) L.push(`TRAVELLERS: ${s.travellers} (players choose; you set alignment)`);
+    const prep = [];
+    if (s.decoy) prep.push(`Drunk: place IS THE DRUNK on the ${nm(s.decoy)} player`);
+    for (const i of s.info) { const l = infoLine(s, i); prep.push(`${l.who}: ${l.text}`); }
+    for (const n of seatNotes(s)) prep.push(`${n.who}: ${n.text} (${n.note.toLowerCase().replace(".", "")})`);
+    if (prep.length) { L.push(""); L.push("FIRST-NIGHT PREP"); prep.forEach(x => L.push("- " + x)); }
+    L.push("");
+    L.push("FIRST NIGHT: Dusk → " + s.firstNight.map(r => r.label).concat("Dawn").join(" → "));
+    L.push("OTHER NIGHTS: Dusk → " + s.otherNights.map(r => r.label).concat("Dawn").join(" → "));
+    return L.join("\n");
+  }
+
+  return { ROLES, BY_ID, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, checkSetup, toText, infoLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural };
+})();
+/*CORE-END*/
+</script>
+
+<script>
+(function () {
+  "use strict";
+  const B = BOTC;
+  const STORE = "botc-tb-generator-v1";
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  let state = { players: 8, pref: {} };
+  try { const saved = JSON.parse(localStorage.getItem(STORE) || "null"); if (saved && saved.players) state = { players: saved.players, pref: saved.pref || {} }; } catch (e) {}
+  let result = null, staleKey = null;
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+  const cfgKey = () => JSON.stringify([state.players, Object.entries(state.pref).filter(([, v]) => v !== "auto").sort()]);
+
+  /* ----- picker ----- */
+  const teamsEl = $("teams");
+  teamsEl.innerHTML = B.TEAMS.map(t => {
+    const evil = !B.GOOD(t);
+    return `<div class="team"><div class="team-head"><h3 class="${evil ? "t-evil" : "t-good"}">${B.TEAM_LABEL[t][1]}</h3><span class="budget" id="budget-${t}"></span></div>
+      <div class="tiles">${B.ROLES.filter(r => r.team === t).map(r => `
+        <div class="tile ${evil ? "evil" : "good"}" id="tile-${r.id}" data-state="auto">
+          <div class="row"><span class="nm">${esc(r.name)}</span>
+            <div class="seg3" role="group" aria-label="${esc(r.name)}">
+              <button type="button" data-id="${r.id}" data-v="include" aria-pressed="false">In</button><button type="button" data-id="${r.id}" data-v="auto" aria-pressed="true">Auto</button><button type="button" data-id="${r.id}" data-v="exclude" aria-pressed="false">Out</button>
+            </div></div>
+          <p class="ab">${esc(r.ability)}</p>
+          <span class="flag" id="flag-${r.id}" hidden></span>
+        </div>`).join("")}</div></div>`;
+  }).join("");
+  teamsEl.addEventListener("click", e => {
+    const b = e.target.closest("button[data-id]");
+    if (!b || b.disabled) return;
+    const { id, v } = b.dataset;
+    if (v === "auto") delete state.pref[id]; else state.pref[id] = v;
+    save(); refresh();
+  });
+
+  /* ----- open / close the character list ----- */
+  const OPEN_KEY = STORE + "-picker-open";
+  let pickerOpen = true;
+  try { const v = localStorage.getItem(OPEN_KEY); if (v !== null) pickerOpen = v === "1"; } catch (e) {}
+  function applyPicker() {
+    $("picker-toggle").setAttribute("aria-expanded", String(pickerOpen));
+    $("picker-body").hidden = !pickerOpen;
+    $("picker-toggle").setAttribute("aria-label", (pickerOpen ? "Hide" : "Show") + " characters");
+  }
+  $("picker-toggle").addEventListener("click", () => {
+    pickerOpen = !pickerOpen;
+    try { localStorage.setItem(OPEN_KEY, pickerOpen ? "1" : "0"); } catch (e) {}
+    applyPicker(); refresh();
+  });
+  applyPicker();
+
+  /* ----- player count ----- */
+  const setPlayers = n => { state.players = Math.max(5, Math.min(20, n)); save(); refresh(); };
+  $("players").addEventListener("input", e => setPlayers(+e.target.value));
+  $("dec").addEventListener("click", () => setPlayers(state.players - 1));
+  $("inc").addEventListener("click", () => setPlayers(state.players + 1));
+  $("reset").addEventListener("click", () => { state.pref = {}; save(); refresh(); });
+  $("generate").addEventListener("click", () => run());
+
+  function refresh() {
+    const a = B.analyze(state);
+    const n = state.players;
+    $("pcount").textContent = n;
+    $("players").value = n;
+    $("dec").disabled = n <= 5; $("inc").disabled = n >= 20;
+    $("count-hint").textContent = n > 15 ? `15 players + ${n - 15} Traveller${n - 15 > 1 ? "s" : ""}` : n <= 6 ? "Teensyville: no Demon bluffs" : "5–15, plus Travellers up to 20";
+
+    // distribution bar
+    const real = Math.min(n, 15), [TF, OS, MN] = B.DIST[real];
+    const baronIn = state.pref.baron === "include" || (a.ok && a.forcedBaron);
+    const tf = TF - (baronIn ? 2 : 0), os = OS + (baronIn ? 2 : 0), tr = n - real;
+    const segs = [["b-tf", tf, "Townsfolk"], ["b-os", os, "Outsiders"], ["b-mn", MN, "Minions"], ["b-dm", 1, "Demon"], ["b-tr", tr, "Travellers"]].filter(s => s[1] > 0);
+    $("bar").innerHTML = segs.map(([c, v]) => `<div class="${c}" style="flex-grow:${v}">${v}</div>`).join("");
+    $("bar").setAttribute("aria-label", segs.map(s => `${s[1]} ${s[2]}`).join(", "));
+    $("legend").innerHTML = segs.map(s => `<span>${s[2]} <b>${s[1]}</b></span>`).join("") + (baronIn ? `<span>Baron: +2 Outsiders</span>` : (!state.pref.baron || state.pref.baron === "auto") ? `<span>A random Baron shifts 2 Townsfolk to Outsiders</span>` : "");
+
+    // tiles
+    for (const r of B.ROLES) {
+      const v = B.prefOf(state, r.id), tile = $("tile-" + r.id);
+      tile.dataset.state = v;
+      tile.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.v === v)); if (r.id === "imp") b.disabled = b.dataset.v !== "include"; });
+      const flag = $("flag-" + r.id);
+      let f = "";
+      if (r.id === "imp") f = "Always in play: the only Demon";
+      else if (r.id === "baron" && a.ok && a.forcedBaron) f = "Added automatically so your choices fit";
+      else if (r.id === "drunk" && v === "include") f = "A spare Townsfolk token goes in the bag as its decoy";
+      flag.textContent = f; flag.hidden = !f;
+    }
+
+    // budgets
+    const incCount = t => B.ROLES.filter(r => r.team === t && B.prefOf(state, r.id) === "include").length;
+    const slotsFor = { townsfolk: tf, outsider: os, minion: MN, demon: 1 };
+    for (const t of B.TEAMS) {
+      const el = $("budget-" + t), k = incCount(t), s = slotsFor[t];
+      el.textContent = `${k} in · ${s} slot${s === 1 ? "" : "s"}${t !== "demon" && baronIn && t !== "minion" ? " with Baron" : ""}`;
+      el.classList.toggle("over", k > s);
+    }
+
+    // errors
+    $("errors").innerHTML = a.ok ? "" : a.errors.map(m => `<div class="err">${esc(m)}</div>`).join("");
+    $("generate").disabled = !a.ok;
+    const k = Object.values(state.pref).filter(v => v !== "auto").length;
+    $("choice-count").textContent = k ? `${k} choice${k > 1 ? "s" : ""} set` : "";
+    $("reset").hidden = !k;
+
+    // collapsed summary of In / Out choices
+    const ins = B.ROLES.filter(r => r.id !== "imp" && B.prefOf(state, r.id) === "include");
+    const outs = B.ROLES.filter(r => B.prefOf(state, r.id) === "exclude");
+    $("picker-state").textContent = pickerOpen ? "Hide" : (ins.length || outs.length ? `${ins.length} in · ${outs.length} out` : "All on Auto");
+    const sum = $("choice-summary");
+    sum.innerHTML = ins.map(r => `<span class="chip ${B.GOOD(r.team) ? "in-good" : "in-evil"}">${esc(r.name)}</span>`).join("")
+      + outs.map(r => `<span class="chip out">${esc(r.name)}</span>`).join("");
+    sum.hidden = pickerOpen || !(ins.length || outs.length);
+
+    if (result && cfgKey() !== staleKey) renderResult(true);
+  }
+
+  function run() {
+    const r = B.generate(state);
+    if (!r.ok) { $("errors").innerHTML = r.errors.map(m => `<div class="err">${esc(m)}</div>`).join(""); return; }
+    result = r.setup; staleKey = cfgKey();
+    renderResult(false);
+  }
+
+  /* ----- result ----- */
+  function chip(id, cls) { const r = B.BY_ID[id]; return `<span class="chip ${B.GOOD(r.team) ? "good" : "evil"} ${cls || ""}">${esc(r.name)}</span>`; }
+  function renderResult(stale) {
+    const s = result, el = $("result");
+    if (!s) { el.innerHTML = `<p class="muted">Press Generate to build a setup.</p>`; return; }
+    const pinned = new Set(s.included);
+    const group = (t, list) => `<div class="grp"><span class="grp-name ${B.GOOD(t) ? "t-good" : "t-evil"}">${B.TEAM_LABEL[t][1]} · ${list.length}</span>${
+      list.length ? list.map(id => {
+        const r = B.BY_ID[id];
+        const tags = (pinned.has(id) && id !== "imp" ? `<span class="pin">pinned</span>` : "") + (id === "baron" && s.autoBaron ? `<span class="pin">added so your choices fit</span>` : "");
+        const extra = id === "drunk" && s.decoy ? `<span class="ab">Thinks they are the <b>${esc(B.BY_ID[s.decoy].name)}</b>. Put the ${esc(B.BY_ID[s.decoy].name)} token in the bag.</span>` : "";
+        return `<div class="ch ${B.GOOD(t) ? "" : "evil"}"><span class="nm"><b>${esc(r.name)}</b>${tags}</span><span class="ab">${esc(r.ability)}</span>${extra}</div>`;
+      }).join("") : `<span class="muted">None this game</span>`}</div>`;
+
+    const prep = [];
+    if (s.decoy) prep.push({ who: "Drunk", text: `Place IS THE DRUNK on the ${B.BY_ID[s.decoy].name} player.`, note: "Wake them as that Townsfolk. You may give them false info." });
+    s.info.forEach(i => { const l = B.infoLine(s, i); prep.push(Object.assign({ key: i.key }, l)); });
+    B.seatNotes(s).forEach(n => prep.push(n));
+
+    el.innerHTML = `
+      <div class="res-head">
+        <span class="eyebrow">Setup</span>
+        <h2>${s.players} players${s.travellers ? ` · 15 + ${s.travellers} Travellers` : ""}</h2>
+        <p class="summary">${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${B.plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${B.plural(s.counts.minion, "minion")} · 1 Demon${s.baron ? " · Baron +2 Outsiders" : ""}</p>
+        ${stale ? `<p class="stale">Your choices changed since this was generated. Press Generate to update.</p>` : ""}
+        <div class="actions"><button type="button" class="btn small" id="reroll">Re-roll</button><button type="button" class="btn small" id="copy">Copy as text</button></div>
+        <div id="copy-fallback"></div>
+      </div>
+      <div class="block"><h3>In play</h3><div class="inplay">
+        ${group("townsfolk", s.townsfolk)}${group("outsider", s.outsiders)}${group("minion", s.minions)}${group("demon", ["imp"])}
+      </div></div>
+      <div class="block"><h3>Put in the bag · ${s.bag.length} tokens</h3><div class="chips">${s.bag.map(id => chip(id, id === s.decoy ? "decoy" : "")).join("")}</div>
+        ${s.decoy ? `<p class="muted">Dashed: the Drunk's decoy. The Drunk token stays out of the bag.</p>` : ""}</div>
+      ${s.travellers ? `<div class="block"><h3>Travellers · ${s.travellers}</h3><p class="muted">Recommended: Scapegoat, Gunslinger, Beggar, Bureaucrat, Thief. They choose; you set alignment.</p></div>` : ""}
+      <div class="block"><h3>Demon bluffs</h3>${s.bluffs.length ? `<div class="chips">${s.bluffs.map(id => chip(id)).join("")}</div>` : `<p class="muted">None: with 5–6 players the Demon gets no bluffs and Minion and Demon don't learn each other.</p>`}</div>
+      ${prep.length ? `<div class="block"><h3>First-night prep</h3><ul class="prep">${prep.map(x => `<li><span><span class="who">${esc(x.who)}</span> ${esc(x.text)}${x.note ? `<span class="note">${esc(x.note)}</span>` : ""}</span>${x.key ? `<button type="button" class="btn small" data-repick="${x.key}" aria-label="Re-pick ${esc(x.who)}">Re-pick</button>` : ""}</li>`).join("")}</ul></div>` : ""}
+      ${s.reminders.length ? `<div class="block"><h3>Reminder tokens to pull</h3><div class="chips">${s.reminders.map(r => `<span class="chip">${esc(r.name)}${r.decoy ? " (Drunk)" : ""}: ${esc(r.tokens.join(", "))}</span>`).join("")}</div></div>` : ""}
+      <div class="block"><h3>Night order</h3><div class="nights">
+        <div><p class="muted" style="margin-bottom:6px"><b>First night</b></p><ol><li class="sys">Dusk</li>${s.firstNight.map(r => `<li class="${r.sys ? "sys" : ""}">${esc(r.label)}<span class="note">${esc(r.note)}</span></li>`).join("")}<li class="sys">Dawn</li></ol></div>
+        <div><p class="muted" style="margin-bottom:6px"><b>Other nights</b></p><ol><li class="sys">Dusk</li>${s.otherNights.map(r => `<li>${esc(r.label)}<span class="note">${esc(r.note)}</span></li>`).join("")}<li class="sys">Dawn</li></ol></div>
+      </div></div>`;
+
+    $("reroll").addEventListener("click", () => { if (B.analyze(state).ok) run(); });
+    $("copy").addEventListener("click", copyText);
+    el.querySelectorAll("[data-repick]").forEach(b => b.addEventListener("click", () => { result = B.repick(result, b.dataset.repick); renderResult(cfgKey() !== staleKey); }));
+  }
+
+  function toast(msg) {
+    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; t.setAttribute("role", "status");
+    document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
+  }
+  function copyText() {
+    const text = B.toText(result);
+    const fallback = () => {
+      const box = $("copy-fallback");
+      box.innerHTML = `<textarea class="copybox" id="copybox" aria-label="Setup as text" readonly></textarea><p class="muted">Copying isn't available here. The text is selected; copy it with your keyboard.</p>`;
+      const ta = $("copybox"); ta.value = text; ta.focus(); ta.select();
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast("Copied setup"), fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  refresh();
+  if (B.analyze(state).ok) run(); else renderResult(false);
+})();
+</script>
+</body>
+</html>
