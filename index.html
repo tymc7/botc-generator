@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Clocktower Setup Generator</title>
-<meta name="description" content="Storyteller tool that generates a legal Blood on the Clocktower setup for Trouble Brewing or Bad Moon Rising, with characters you can pin in or rule out.">
+<meta name="description" content="Storyteller tool that generates a legal Blood on the Clocktower setup for Trouble Brewing, Bad Moon Rising or Sects & Violets, with characters you can pin in or rule out.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23a6252c'/%3E%3Cpath d='M16 7v9l6 4' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -122,7 +122,9 @@ button{font:inherit;color:inherit}
 .top-side{display:grid;gap:8px;justify-items:end}
 .script-switch button{padding:7px 14px;font-size:.85rem}
 .script-switch button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.script-switch .short{display:none}
 @media (max-width:640px){.top-side{justify-items:start}}
+@media (max-width:480px){.script-switch .long{display:none}.script-switch .short{display:inline}}
 
 /* result */
 .result{grid-area:result;padding:20px;display:grid;gap:20px;align-content:start}
@@ -227,7 +229,8 @@ var BOTC = (function () {
 
   /* ---------- DATA ---------- */
   // first / other: position in the official night sheet (lower wakes earlier)
-  // modifier: the Outsider change a setup Minion can make (the Storyteller picks one)
+  // modifier: the Outsider change a setup character makes (for a Minion with several, the Storyteller picks one)
+  // clamp: with no Outsiders to remove, the modifier changes nothing (Vigormortis)
   const ROLES = [
     // Trouble Brewing
     { id: "washerwoman", name: "Washerwoman", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Townsfolk.", first: 51, firstNote: "Point to the TOWNSFOLK and WRONG players, then show the Townsfolk token.", reminders: ["Townsfolk", "Wrong"] },
@@ -277,20 +280,50 @@ var BOTC = (function () {
     { id: "zombuul", name: "Zombuul", team: "demon", ability: "Each night*, if no-one died today, choose a player: they die. The 1st time you die, you live but register as dead.", other: 40, otherNote: "If no one died today, they point to a player, who dies.", reminders: ["Died Today", "Dead"] },
     { id: "pukka", name: "Pukka", team: "demon", ability: "Each night, choose a player: they are poisoned. The previously poisoned player dies then becomes healthy.", first: 46, other: 41, firstNote: "They point to a player. Mark them POISONED.", otherNote: "They point to a player to poison. The previously poisoned player dies, then becomes healthy.", reminders: ["Poisoned", "Poisoned", "Dead"] },
     { id: "shabaloth", name: "Shabaloth", team: "demon", ability: "Each night*, choose 2 players: they die. A dead player you chose last night might be regurgitated.", other: 42, otherNote: "A player they chose last night might come back to life. Then they point to 2 players, who die.", reminders: ["Dead", "Dead", "Alive"] },
-    { id: "po", name: "Po", team: "demon", ability: "Each night*, you may choose a player: they die. If your last choice was no-one, choose 3 players tonight.", other: 43, otherNote: "They may point to a player, who dies. If they chose no one last time, they point to 3.", reminders: ["Dead", "Dead", "Dead", "3 Attacks"] }
+    { id: "po", name: "Po", team: "demon", ability: "Each night*, you may choose a player: they die. If your last choice was no-one, choose 3 players tonight.", other: 43, otherNote: "They may point to a player, who dies. If they chose no one last time, they point to 3.", reminders: ["Dead", "Dead", "Dead", "3 Attacks"] },
+    // Sects & Violets
+    { id: "clockmaker", name: "Clockmaker", team: "townsfolk", ability: "You start knowing how many steps from the Demon to its nearest Minion.", first: 59, firstNote: "Show fingers for the steps from the Demon to its nearest Minion.", reminders: [] },
+    { id: "dreamer", name: "Dreamer", team: "townsfolk", ability: "Each night, choose a player (not yourself or Travellers): you learn 1 good & 1 evil character, 1 of which is correct.", first: 60, other: 78, firstNote: "They point to a player. Show 1 good and 1 evil character token, 1 of which is their character.", otherNote: "They point to a player. Show 1 good and 1 evil character token, 1 of which is their character.", reminders: [] },
+    { id: "snakecharmer", name: "Snake Charmer", team: "townsfolk", ability: "Each night, choose an alive player: a chosen Demon swaps characters & alignments with you & is then poisoned.", first: 36, other: 22, firstNote: "They point to a living player. If it's the Demon, swap their characters and alignments, and mark the old Demon POISONED.", otherNote: "They point to a living player. If it's the Demon, swap their characters and alignments, and mark the old Demon POISONED.", reminders: ["Poisoned"] },
+    { id: "mathematician", name: "Mathematician", team: "townsfolk", ability: "Each night, you learn how many players' abilities worked abnormally (since dawn) due to another character's ability.", first: 76, other: 95, firstNote: "Show fingers for how many abilities worked abnormally.", otherNote: "Show fingers for how many abilities worked abnormally since dawn.", reminders: ["Abnormal", "Abnormal", "Abnormal", "Abnormal", "Abnormal"] },
+    { id: "flowergirl", name: "Flowergirl", team: "townsfolk", ability: "Each night*, you learn if a Demon voted today.", other: 79, otherNote: "Nod if a Demon voted today, shake your head if not.", reminders: ["Demon Voted", "Demon Not Voted"] },
+    { id: "towncrier", name: "Town Crier", team: "townsfolk", ability: "Each night*, you learn if a Minion nominated today.", other: 80, otherNote: "Nod if a Minion nominated today, shake your head if not.", reminders: ["Minions Not Nominated", "Minion Nominated"] },
+    { id: "oracle", name: "Oracle", team: "townsfolk", ability: "Each night*, you learn how many dead players are evil.", other: 81, otherNote: "Show fingers for how many dead players are evil.", reminders: [] },
+    { id: "savant", name: "Savant", team: "townsfolk", ability: "Each day, you may visit the Storyteller to learn 2 things in private: 1 is true & 1 is false.", reminders: [] },
+    { id: "seamstress", name: "Seamstress", team: "townsfolk", ability: "Once per game, at night, choose 2 players (not yourself): you learn if they are the same alignment.", first: 61, other: 82, firstNote: "They may point to 2 players. Nod if they're the same alignment, shake your head if not.", otherNote: "They may point to 2 players. Nod if they're the same alignment, shake your head if not.", reminders: ["No Ability"] },
+    { id: "philosopher", name: "Philosopher", team: "townsfolk", ability: "Once per game, at night, choose a good character: gain that ability. If this character is in play, they are drunk.", first: 13, other: 10, firstNote: "They may choose a good character. If it's in play, mark that player DRUNK.", otherNote: "They may choose a good character. If it's in play, mark that player DRUNK.", reminders: ["Drunk"], remindersGlobal: ["Is The Philosopher"] },
+    { id: "artist", name: "Artist", team: "townsfolk", ability: "Once per game, during the day, privately ask the Storyteller any yes/no question.", reminders: ["No Ability"] },
+    { id: "juggler", name: "Juggler", team: "townsfolk", ability: "On your 1st day, publicly guess up to 5 players' characters. That night, you learn how many you got correct.", other: 83, otherNote: "After their first day, show fingers for how many guesses were correct.", reminders: ["Correct", "Correct", "Correct", "Correct", "Correct"] },
+    { id: "sage", name: "Sage", team: "townsfolk", ability: "If the Demon kills you, you learn that it is 1 of 2 players.", other: 62, otherNote: "If the Demon killed them tonight, point to 2 players, 1 of which is the Demon.", reminders: [] },
+    { id: "mutant", name: "Mutant", team: "outsider", ability: "If you are \u201cmad\u201d about being an Outsider, you might be executed.", reminders: [] },
+    { id: "sweetheart", name: "Sweetheart", team: "outsider", ability: "When you die, 1 player is drunk from now on.", other: 60, otherNote: "If they died, choose a player to be DRUNK from now on (if you haven't yet).", reminders: ["Drunk"] },
+    { id: "barber", name: "Barber", team: "outsider", ability: "If you died today or tonight, the Demon may choose 2 players (not another Demon) to swap characters.", other: 59, otherNote: "If they died today or tonight, wake the Demon: they may choose 2 players (not another Demon) to swap characters. Show each their new character.", reminders: ["Haircuts Tonight"] },
+    { id: "klutz", name: "Klutz", team: "outsider", ability: "When you learn that you died, publicly choose 1 alive player: if they are evil, your team loses.", reminders: [] },
+    { id: "eviltwin", name: "Evil Twin", team: "minion", ability: "You & an opposing player know each other. If the good player is executed, evil wins. Good can't win if you both live.", first: 40, firstNote: "Wake both twins. Show each the other's character token and point to them.", reminders: ["Twin"] },
+    { id: "witch", name: "Witch", team: "minion", ability: "Each night, choose a player: if they nominate tomorrow, they die. If just 3 players live, you lose this ability.", first: 41, other: 26, firstNote: "They point to a player. Mark them CURSED.", otherNote: "They point to a player. Mark them CURSED.", reminders: ["Cursed"] },
+    { id: "cerenovus", name: "Cerenovus", team: "minion", ability: "Each night, choose a player & a good character: they are \u201cmad\u201d they are this character tomorrow, or might be executed.", first: 42, other: 27, firstNote: "They choose a player and a good character. Mark them MAD; wake them and show the Cerenovus and that character.", otherNote: "They choose a player and a good character. Mark them MAD; wake them and show the Cerenovus and that character.", reminders: ["Mad"] },
+    { id: "pithag", name: "Pit-Hag", team: "minion", ability: "Each night*, choose a player & a character they become (if not in play). If a Demon is made, deaths tonight are arbitrary.", other: 28, otherNote: "They choose a player and a character. If it's not in play, wake that player and show YOU ARE and their new character.", reminders: [] },
+    { id: "fanggu", name: "Fang Gu", team: "demon", ability: "Each night*, choose a player: they die. The 1st Outsider this kills becomes an evil Fang Gu & you die instead. [+1 Outsider]", other: 44, otherNote: "They point to a player, who dies. The first time it's an Outsider, that player becomes an evil Fang Gu and the old Fang Gu dies instead.", reminders: ["Dead", "Once"], setup: true, modifier: [1] },
+    { id: "vigormortis", name: "Vigormortis", team: "demon", ability: "Each night*, choose a player: they die. Minions you kill keep their ability & poison 1 Townsfolk neighbor. [-1 Outsider]", other: 48, otherNote: "They point to a player, who dies. If it's a Minion, they keep their ability; mark a Townsfolk neighbour POISONED.", reminders: ["Dead", "Has Ability", "Has Ability", "Has Ability", "Poisoned", "Poisoned", "Poisoned"], setup: true, modifier: [-1], clamp: true },
+    { id: "nodashii", name: "No Dashii", team: "demon", ability: "Each night*, choose a player: they die. Your 2 Townsfolk neighbors are poisoned.", other: 45, otherNote: "They point to a player, who dies.", reminders: ["Dead", "Poisoned", "Poisoned"] },
+    { id: "vortox", name: "Vortox", team: "demon", ability: "Each night*, choose a player: they die. Townsfolk abilities yield false info. Each day, if no-one is executed, evil wins.", other: 46, otherNote: "They point to a player, who dies.", reminders: ["Dead"] }
   ];
   const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
   const SCRIPTS = {
-    tb: { id: "tb", name: "Trouble Brewing", travellers: ["Scapegoat", "Gunslinger", "Beggar", "Bureaucrat", "Thief"],
+    tb: { id: "tb", name: "Trouble Brewing", short: "TB", travellers: ["Scapegoat", "Gunslinger", "Beggar", "Bureaucrat", "Thief"],
       roles: ["washerwoman", "librarian", "investigator", "chef", "empath", "fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin", "slayer", "soldier", "mayor", "butler", "drunk", "recluse", "saint", "poisoner", "spy", "scarletwoman", "baron", "imp"] },
-    bmr: { id: "bmr", name: "Bad Moon Rising", travellers: ["Apprentice", "Matron", "Judge", "Bishop", "Voudon"],
-      roles: ["grandmother", "sailor", "chambermaid", "exorcist", "innkeeper", "gambler", "gossip", "courtier", "professor", "minstrel", "tealady", "pacifist", "fool", "goon", "lunatic", "tinker", "moonchild", "godfather", "devilsadvocate", "assassin", "mastermind", "zombuul", "pukka", "shabaloth", "po"] }
+    bmr: { id: "bmr", name: "Bad Moon Rising", short: "BMR", travellers: ["Apprentice", "Matron", "Judge", "Bishop", "Voudon"],
+      roles: ["grandmother", "sailor", "chambermaid", "exorcist", "innkeeper", "gambler", "gossip", "courtier", "professor", "minstrel", "tealady", "pacifist", "fool", "goon", "lunatic", "tinker", "moonchild", "godfather", "devilsadvocate", "assassin", "mastermind", "zombuul", "pukka", "shabaloth", "po"] },
+    snv: { id: "snv", name: "Sects & Violets", short: "S&V", travellers: ["Barista", "Harlot", "Butcher", "Bone Collector", "Deviant"],
+      roles: ["clockmaker", "dreamer", "snakecharmer", "mathematician", "flowergirl", "towncrier", "oracle", "savant", "seamstress", "philosopher", "artist", "juggler", "sage", "mutant", "sweetheart", "barber", "klutz", "eviltwin", "witch", "cerenovus", "pithag", "fanggu", "vigormortis", "nodashii", "vortox"] }
   };
   for (const S of Object.values(SCRIPTS)) {
     S.demons = S.roles.filter(id => BY_ID[id].team === "demon");
-    const mods = S.roles.filter(id => BY_ID[id].modifier);
+    // mod: the Outsider-changing Minion (Baron, Godfather); demonMods: Outsider-changing Demons (Fang Gu, Vigormortis)
+    const mods = S.roles.filter(id => BY_ID[id].modifier && BY_ID[id].team === "minion");
     if (mods.length > 1) throw new Error("one Outsider-changing Minion per script");
     S.mod = mods[0] || null;
+    S.demonMods = S.demons.filter(id => BY_ID[id].modifier);
   }
   const TEAMS = ["townsfolk", "outsider", "minion", "demon"];
   const TEAM_LABEL = { townsfolk: ["Townsfolk", "Townsfolk"], outsider: ["Outsider", "Outsiders"], minion: ["Minion", "Minions"], demon: ["Demon", "Demons"] };
@@ -337,6 +370,9 @@ var BOTC = (function () {
   const plural = (n, team) => TEAM_LABEL[team][n === 1 ? 0 : 1];
   const slots = (n, w) => `${n} ${w} slot${n === 1 ? "" : "s"}`;
   const shiftLabel = d => `${d > 0 ? "+" : "−"}${Math.abs(d)} Outsider${Math.abs(d) === 1 ? "" : "s"}`;
+  const modLabel = m => m.shift ? shiftLabel(m.shift) : "no Outsiders to remove";
+  // a Demon's fixed Outsider change, given the base Outsider count
+  const demonShift = (id, os) => { const r = BY_ID[id]; if (!r.modifier) return 0; const d = r.modifier[0]; return r.clamp ? Math.max(d, -os) : d; };
   // "+2 Outsiders" (Baron), "−1 or +1 Outsider" (Godfather)
   function modTag(id) {
     const ds = BY_ID[id].modifier;
@@ -358,7 +394,7 @@ var BOTC = (function () {
     const mod = S.mod, mp = mod ? p(mod) : "exclude", shifts = mod ? BY_ID[mod].modifier : [];
     const states = !mod ? [false] : mp === "include" ? [true] : mp === "exclude" ? [false] : [false, true];
 
-    function check(b, d) {
+    function check(TF, OS, b, d) {
       const e = [];
       const tf = TF - d, os = OS + d;
       const incMn = inc.minion.filter(x => x !== mod).length + (b ? 1 : 0);
@@ -376,20 +412,41 @@ var BOTC = (function () {
       }
       return e;
     }
-    // per state: the Outsider shifts that fit, or the errors of the closest one
-    const checks = states.map(b => {
-      if (!b) { const errs = check(false, 0); return { mod: false, shifts: errs.length ? [] : [0], errs }; }
-      const opts = shifts.filter(d => OS + d >= 0).map(d => ({ d, errs: check(true, d) }));
-      const fit = opts.filter(o => !o.errs.length);
-      const best = opts.reduce((x, y) => y.errs.length < x.errs.length ? y : x);
-      return { mod: true, shifts: fit.map(o => o.d), errs: fit.length ? [] : best.errs };
-    });
-    const feasible = checks.filter(c => !c.errs.length);
+    // per Minion state: the Outsider shifts that fit, or the errors of the closest one
+    function countStates(TF, OS) {
+      const checks = states.map(b => {
+        if (!b) { const errs = check(TF, OS, false, 0); return { mod: false, shifts: errs.length ? [] : [0], errs }; }
+        const opts = shifts.filter(d => OS + d >= 0).map(d => ({ d, errs: check(TF, OS, true, d) }));
+        const fit = opts.filter(o => !o.errs.length);
+        const best = opts.reduce((x, y) => y.errs.length < x.errs.length ? y : x);
+        return { mod: true, shifts: fit.map(o => o.d), errs: fit.length ? [] : best.errs };
+      });
+      return { checks, feasible: checks.filter(c => !c.errs.length) };
+    }
+    // with Outsider-changing Demons, the counts depend on the Demon: one group per Demon
+    const groups = !S.demonMods.length ? [Object.assign({ demon: null, shift: 0, allowed: true }, countStates(TF, OS))]
+      : S.demons.map(D => { const sh = demonShift(D, OS); return Object.assign({ demon: D, shift: sh, allowed: inc.demon.length ? inc.demon.includes(D) : p(D) !== "exclude" }, countStates(TF - sh, OS + sh)); });
+    const fitting = groups.filter(g => g.allowed && g.feasible.length);
 
     let errors = [];
     if (inc.demon.length > 1) errors.push(`You included ${inc.demon.length} Demons, but only one can be in play. Keep one.`);
     else if (!nonEx.demon.length) errors.push("Every Demon is excluded. Allow at least one.");
-    if (!feasible.length) {
+    if (!fitting.length && S.demonMods.length && !errors.length) {
+      // which Demons would fit if the Demon choices allowed them
+      const fit = groups.filter(g => g.feasible.length).map(g => g.demon);
+      const tagged = ids => ids.map(D => BY_ID[D].modifier ? `${BY_ID[D].name} (${modTag(D)})` : BY_ID[D].name);
+      const orList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " or " + xs[xs.length - 1];
+      if (fit.length && inc.demon.length) errors.push(`With the ${BY_ID[inc.demon[0]].name}, these choices don't fit. They fit with the ${orList(tagged(fit))}. Change the Demon or your other choices.`);
+      else if (fit.length) errors.push(`These choices only fit with the ${orList(tagged(fit))}, which you excluded. Allow ${fit.length > 1 ? "one of them" : "it"} or change your other choices.`);
+      else {
+        // nothing fits with any Demon: explain using the chosen Demon, else an unshifted one
+        const g = groups.find(x => inc.demon.includes(x.demon)) || groups.find(x => x.allowed && !x.shift) || groups.find(x => x.allowed);
+        const msg = e => message(e, real, mp, S, g.shift ? g.demon : null);
+        g.checks[0].errs.forEach(e => errors.push(msg(e)));
+        errors = [...new Set(errors)];
+      }
+    } else if (!fitting.length && !S.demonMods.length) {
+      const { checks } = groups[0];
       const msg = e => message(e, real, mp, S);
       if (mp === "auto") {
         const fe = checks[0].errs, te = checks[1].errs;
@@ -410,11 +467,16 @@ var BOTC = (function () {
       } else checks[0].errs.forEach(e => errors.push(msg(e)));
       errors = [...new Set(errors)];
     }
-    const forcedMod = mp === "auto" && feasible.length === 1 && feasible[0].mod;
-    return { ok: feasible.length > 0 && !errors.length, errors, players, real, travellers, base: { tf: TF, os: OS, mn: MN }, feasible, forcedMod, mod, inc, nonEx, script: S.id };
+    const feasible = S.demonMods.length ? null : groups[0].feasible;
+    const forcedMod = mp === "auto" && !!feasible && feasible.length === 1 && feasible[0].mod;
+    // a Demon left on Auto that's the only one fitting the other choices
+    const fittingDemons = S.demonMods.length ? fitting.map(g => g.demon) : null;
+    const forcedDemon = fittingDemons && !inc.demon.length && fittingDemons.length === 1 && fittingDemons.length < nonEx.demon.length ? fittingDemons[0] : null;
+    return { ok: fitting.length > 0 && !errors.length, errors, players, real, travellers, base: { tf: TF, os: OS, mn: MN }, feasible, forcedMod, mod, inc, nonEx, script: S.id,
+      groups: S.demonMods.length ? fitting : null, fittingDemons, forcedDemon };
   }
 
-  function message(e, real, mp, S) {
+  function message(e, real, mp, S, dm) {
     const M = S.mod && BY_ID[S.mod].name, tag = S.mod && modTag(S.mod), shifts = S.mod ? BY_ID[S.mod].modifier : [];
     const up = Math.max(0, ...shifts), down = Math.max(0, ...shifts.map(d => -d));
     switch (e.code) {
@@ -424,20 +486,27 @@ var BOTC = (function () {
         return `You included ${e.n} Minions, but ${real} players have ${slots(e.slots, "Minion")}. ${fix}`;
       }
       case "mnShort": return `Only ${e.n} ${plural(e.n, "minion")} left after exclusions; ${real} players need ${e.need}.`;
-      case "tfOver": return e.mod
+      case "tfOver": return dm && !e.mod
+        ? `With the ${BY_ID[dm].name} (${modTag(dm)}), ${real} players have ${slots(e.slots, "Townsfolk")}, but you included ${e.n}. Remove some Townsfolk or the ${BY_ID[dm].name}.`
+        : e.mod
         ? `With the ${M}, ${real} players have ${slots(e.slots, "Townsfolk")}, but you included ${e.n}. Remove some Townsfolk or the ${M}.`
         : (mp === "exclude" && e.n <= e.slots + down
           ? `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Allow the ${M} (${tag}) or remove some.`
           : `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Remove some or raise the player count.`);
-      case "tfShort": return `Only ${e.n} Townsfolk left after exclusions; this setup needs ${e.need}. Allow more Townsfolk.`;
+      case "tfShort": return dm
+        ? `Only ${e.n} Townsfolk left after exclusions; with the ${BY_ID[dm].name} (${modTag(dm)}) this setup needs ${e.need}. Allow more Townsfolk or remove the ${BY_ID[dm].name}.`
+        : `Only ${e.n} Townsfolk left after exclusions; this setup needs ${e.need}. Allow more Townsfolk.`;
       case "drunkDecoy": return "The Drunk needs a Townsfolk that isn't in play to pose as, but your exclusions leave none spare. Allow another Townsfolk.";
-      case "osOver": return e.mod
+      case "osOver": return dm && !e.mod
+        ? `With the ${BY_ID[dm].name} (${modTag(dm)}), ${real} players have ${slots(e.slots, "Outsider")}, but you included ${e.n}. Remove some Outsiders or the ${BY_ID[dm].name}.`
+        : e.mod
         ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")} even with the ${M}. Remove some or change the player count.`
         : (mp === "exclude" && e.n <= e.slots + up
           ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Allow the ${M} (${tag}) or remove some.`
           : `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Remove some or change the player count.`);
       case "osShort": return e.drunkBlocked
         ? `Only ${e.n} usable Outsiders left: the Drunk can't be used because every spare Townsfolk is excluded. Allow more characters.`
+        : dm ? `Only ${e.n} ${plural(e.n, "outsider")} left after exclusions; with the ${BY_ID[dm].name} (${modTag(dm)}) this setup needs ${e.need}. Allow more Outsiders or remove the ${BY_ID[dm].name}.`
         : `Only ${e.n} ${plural(e.n, "outsider")} left after exclusions; this setup needs ${e.need}. Allow more Outsiders.`;
     }
     return "This combination can't be generated.";
@@ -456,18 +525,26 @@ var BOTC = (function () {
     if (!a.ok) return { ok: false, errors: a.errors };
     const S = scriptOf(cfg), p = id => prefOf(cfg, id), mod = a.mod;
 
+    // Demon first when it changes the counts (Fang Gu, Vigormortis): uniform among the Demons that fit
+    let feasible = a.feasible, forcedMod = a.forcedMod, demon = null, dShift = 0;
+    if (a.groups) {
+      const g = a.groups.length > 1 ? pick(a.groups, rng) : a.groups[0];
+      demon = g.demon; dShift = g.shift; feasible = g.feasible;
+      forcedMod = !!mod && p(mod) === "auto" && feasible.length === 1 && feasible[0].mod;
+    }
+
     // Minions (decides the Outsider-changing Minion)
     let minions = a.inc.minion.slice();
     let mnPool = a.nonEx.minion.filter(id => !minions.includes(id));
-    if (a.feasible.length === 1) {
-      if (a.feasible[0].mod && !minions.includes(mod)) minions.push(mod);
+    if (feasible.length === 1) {
+      if (feasible[0].mod && !minions.includes(mod)) minions.push(mod);
       mnPool = mnPool.filter(id => id !== mod);
     }
     minions = minions.concat(sample(mnPool, a.base.mn - minions.length, rng));
     const hasMod = !!mod && minions.includes(mod);
-    const shifts = a.feasible.find(f => f.mod === hasMod).shifts;
+    const shifts = feasible.find(f => f.mod === hasMod).shifts;
     const shift = shifts.length > 1 ? pick(shifts, rng) : shifts[0];
-    const tf = a.base.tf - shift, os = a.base.os + shift;
+    const tf = a.base.tf - dShift - shift, os = a.base.os + dShift + shift;
 
     // Outsiders
     const drunkOk = a.nonEx.townsfolk.length >= tf + 1;
@@ -478,9 +555,8 @@ var BOTC = (function () {
     const tfPool = a.nonEx.townsfolk.filter(id => !a.inc.townsfolk.includes(id));
     const townsfolk = a.inc.townsfolk.concat(sample(tfPool, tf - a.inc.townsfolk.length, rng));
 
-    // Demon
-    const dmPool = a.inc.demon.length ? a.inc.demon : a.nonEx.demon;
-    const demon = dmPool.length > 1 ? pick(dmPool, rng) : dmPool[0];
+    // Demon (unless already chosen above)
+    if (!demon) { const dmPool = a.inc.demon.length ? a.inc.demon : a.nonEx.demon; demon = dmPool.length > 1 ? pick(dmPool, rng) : dmPool[0]; }
 
     // Drunk decoy (decoyPool: the Townsfolk the Storyteller may switch it to later)
     const decoyPool = outsiders.includes("drunk") ? order(a.nonEx.townsfolk.filter(id => !townsfolk.includes(id))) : [];
@@ -490,8 +566,9 @@ var BOTC = (function () {
 
     const setup = {
       script: S.id, players: a.players, real: a.real, travellers: a.travellers,
-      modifier: hasMod ? { id: mod, shift } : null,
-      autoModifier: hasMod && p(mod) === "auto" && a.forcedMod,
+      modifier: hasMod ? { id: mod, shift } : BY_ID[demon].modifier ? { id: demon, shift: dShift } : null,
+      autoModifier: hasMod ? p(mod) === "auto" && forcedMod : demon === a.forcedDemon,
+      autoDemon: !!a.forcedDemon,
       counts: { townsfolk: tf, outsider: os, minion: a.base.mn, demon: 1 },
       townsfolk: order(townsfolk), outsiders: order(outsiders), minions: order(minions), demon,
       decoy, decoyPool,
@@ -526,12 +603,13 @@ var BOTC = (function () {
   /* ---------- FIRST-NIGHT PICKS (by character) ---------- */
   const INFO_KEYS = { washerwoman: "townsfolk", librarian: "outsider", investigator: "minion" };
   const grandchildPool = s => s.inPlay.filter(id => GOOD(BY_ID[id].team) && id !== "grandmother");
+  const twinPool = s => s.inPlay.filter(id => GOOD(BY_ID[id].team));
   // the Lunatic's fake bluffs: any good characters on the script, in play or not
   const lunaticBluffPool = s => rolesOf(s.script).filter(r => GOOD(r.team) && r.id !== "lunatic").map(r => r.id);
   function infoSources(setup) {
     // which characters need first-night picks, and whether it's the Drunk acting as them
     const src = [];
-    for (const id of ["fortuneteller", "washerwoman", "librarian", "investigator", "lunatic", "godfather", "grandmother"]) {
+    for (const id of ["fortuneteller", "washerwoman", "librarian", "investigator", "lunatic", "godfather", "grandmother", "eviltwin"]) {
       if (setup.inPlay.includes(id)) src.push({ key: id, drunk: false });
       else if (setup.decoy === id) src.push({ key: id, drunk: true });
     }
@@ -544,6 +622,7 @@ var BOTC = (function () {
       return { key, drunk, redHerring: pick(good, rng) };
     }
     if (key === "grandmother") return { key, drunk, grandchild: pick(grandchildPool(setup), rng) };
+    if (key === "eviltwin") return { key, drunk, twin: pick(twinPool(setup), rng) };
     if (key === "godfather") return { key, drunk, outsiders: setup.outsiders.slice() };
     if (key === "lunatic") return { key, drunk, minions: setup.counts.minion, bluffs: setup.real >= 7 ? sample(lunaticBluffPool(setup), 3, rng) : [] };
     const type = INFO_KEYS[key];
@@ -602,11 +681,20 @@ var BOTC = (function () {
     return Object.assign({}, setup, { info });
   }
 
+  function setTwin(setup, id) {
+    const i = setup.info.findIndex(x => x.key === "eviltwin");
+    if (i < 0 || !twinPool(setup).includes(id)) return setup;
+    const info = setup.info.slice();
+    info[i] = Object.assign({}, info[i], { twin: id });
+    return Object.assign({}, setup, { info });
+  }
+
   function reminderList(setup) {
     const out = [];
     for (const id of [...setup.inPlay, setup.decoy].filter(Boolean)) {
       const r = BY_ID[id];
-      if (r.reminders.length) out.push({ id, name: r.name, tokens: r.reminders, decoy: id === setup.decoy });
+      const tokens = r.reminders.concat(r.remindersGlobal || []);
+      if (tokens.length) out.push({ id, name: r.name, tokens, decoy: id === setup.decoy });
     }
     return out;
   }
@@ -637,7 +725,10 @@ var BOTC = (function () {
     const count = t => s.inPlay.filter(id => BY_ID[id].team === t).length;
     if (count("demon") !== 1 || !s.inPlay.includes(s.demon) || BY_ID[s.demon].team !== "demon") e.push("demon");
     if (count("townsfolk") !== tf || count("outsider") !== os || count("minion") !== MN) e.push("team counts");
-    if (s.modifier ? s.modifier.id !== S.mod || !s.inPlay.includes(S.mod) || !BY_ID[S.mod].modifier.includes(shift) : S.mod && s.inPlay.includes(S.mod)) e.push("modifier");
+    // the setup's one count modifier: the Outsider-changing Minion if in play, else a Demon with a modifier
+    const modBy = S.mod && s.inPlay.includes(S.mod) ? S.mod : BY_ID[s.demon].modifier ? s.demon : null;
+    if (S.mod && s.inPlay.includes(S.mod) && BY_ID[s.demon].modifier) e.push("two modifiers");
+    if (modBy ? !s.modifier || s.modifier.id !== modBy || (modBy === s.demon ? shift !== demonShift(modBy, OS) : !BY_ID[modBy].modifier.includes(shift)) : s.modifier) e.push("modifier");
     for (const id of S.roles) {
       if (p(id) === "include" && !s.inPlay.includes(id)) e.push("missing include " + id);
       if (p(id) === "exclude" && s.inPlay.includes(id)) e.push("excluded in play " + id);
@@ -661,6 +752,7 @@ var BOTC = (function () {
         continue;
       }
       if (i.key === "grandmother") { if (!grandchildPool(s).includes(i.grandchild)) e.push("grandchild"); continue; }
+      if (i.key === "eviltwin") { if (!twinPool(s).includes(i.twin)) e.push("twin"); continue; }
       if (i.key === "godfather") { if (i.outsiders.join() !== s.outsiders.join()) e.push("godfather info"); continue; }
       if (i.key === "lunatic") {
         const pool = lunaticBluffPool(s);
@@ -691,6 +783,7 @@ var BOTC = (function () {
     const who = i.drunk ? `${nm(i.key)} (the Drunk)` : nm(i.key);
     if (i.key === "fortuneteller") return { who, text: `Red Herring: the ${charLabel(s, i.redHerring)} player`, note: i.drunk ? "The Drunk has no ability; answer however you like." : "Mark them RED HERRING. They register as the Demon to the Fortune Teller all game." };
     if (i.key === "grandmother") return { who, text: `Grandchild: the ${charLabel(s, i.grandchild)} player. Show them the ${nm(i.grandchild)} token.`, note: "Mark them GRANDCHILD. If the Demon kills them, the Grandmother dies too." };
+    if (i.key === "eviltwin") return { who: "Evil Twin", text: `Good Twin: the ${charLabel(s, i.twin)} player. Show them the Evil Twin token; show the Evil Twin the ${nm(i.twin)} token.`, note: "Mark them TWIN. Wake both twins together and point each to the other." };
     if (i.key === "godfather") return { who, fixed: true, text: i.outsiders.length ? `Show the ${andList(i.outsiders.map(nm))} token${i.outsiders.length > 1 ? "s" : ""}.` : "No Outsiders in play: show none.", note: "" };
     if (i.key === "lunatic") return { who, text: i.bluffs.length ? `Point to ${i.minions > 1 ? `any ${i.minions} players as their Minions` : "any player as their Minion"}. Bluffs: ${i.bluffs.map(nm).join(", ")}.` : "No Minion info or bluffs at 5–6 players.", note: `Then wake the ${nm(s.demon)}: show THIS PLAYER IS and the Lunatic token, and point to the Lunatic.` };
     if (i.zero) return { who, text: "Show 0: no Outsiders in play", note: i.drunk ? "The Drunk can be shown false info." : "" };
@@ -704,12 +797,22 @@ var BOTC = (function () {
     if (acts("chef")) out.push({ who: s.decoy === "chef" ? "Chef (the Drunk)" : "Chef", text: "Count adjacent evil pairs at the table.", note: "Depends on seating." });
     if (acts("empath")) out.push({ who: s.decoy === "empath" ? "Empath (the Drunk)" : "Empath", text: "Count evil alive neighbours each night.", note: "Depends on seating." });
     if (acts("tealady")) out.push({ who: "Tea Lady", text: "Protects their alive neighbours while both are good.", note: "Depends on seating." });
+    if (acts("clockmaker")) out.push({ who: "Clockmaker", text: "Count steps from the Demon to its nearest Minion.", note: "Depends on seating." });
+    if (acts("nodashii")) out.push({ who: "No Dashii", text: "Poisons the nearest Townsfolk on each side.", note: "Depends on seating." });
+    return out;
+  }
+  // reminders for characters that need no pick but are easy to forget
+  function prepNotes(s) {
+    const out = [];
+    if (s.inPlay.includes("vortox")) out.push({ who: "Vortox", text: "Every Townsfolk's information must be false.", note: "" });
+    if (s.inPlay.includes("fanggu")) out.push({ who: "Fang Gu", text: "Keep a spare Fang Gu token for when an Outsider is killed.", note: "" });
+    if (s.inPlay.includes("pithag")) out.push({ who: "Pit-Hag", text: "Keep the not-in-play tokens to hand, including Demons.", note: "" });
     return out;
   }
   function toText(s) {
     const L = [];
     L.push(`${SCRIPTS[s.script].name} · ${s.players} players${s.travellers ? ` (15 + ${s.travellers} Travellers)` : ""}`);
-    L.push(`${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` (${nm(s.modifier.id)}: ${shiftLabel(s.modifier.shift)})` : ""}`);
+    L.push(`${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` (${nm(s.modifier.id)}: ${modLabel(s.modifier)})` : ""}`);
     L.push("");
     L.push("IN PLAY");
     L.push("Townsfolk: " + s.townsfolk.map(nm).join(", "));
@@ -725,6 +828,7 @@ var BOTC = (function () {
     if (s.lunaticAs) { const l = lunaticLine(s); prep.push(`${l.who}: ${l.text}`); }
     for (const i of s.info) { const l = infoLine(s, i); prep.push(`${l.who}: ${l.text}`); }
     for (const n of seatNotes(s)) prep.push(`${n.who}: ${n.text} (${n.note.toLowerCase().replace(".", "")})`);
+    for (const n of prepNotes(s)) prep.push(`${n.who}: ${n.text}`);
     if (prep.length) { L.push(""); L.push("FIRST-NIGHT PREP"); prep.forEach(x => L.push("- " + x)); }
     L.push("");
     L.push("FIRST NIGHT: Dusk → " + s.firstNight.map(r => r.label).concat("Dawn").join(" → "));
@@ -732,7 +836,7 @@ var BOTC = (function () {
     return L.join("\n");
   }
 
-  return { ROLES, BY_ID, SCRIPTS, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, setDecoy, setRedHerring, setLunaticDemon, setGrandchild, checkSetup, toText, infoLine, lunaticLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural, rolesOf, scriptOf, shiftLabel, modTag };
+  return { ROLES, BY_ID, SCRIPTS, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, setDecoy, setRedHerring, setLunaticDemon, setGrandchild, setTwin, checkSetup, toText, infoLine, lunaticLine, seatNotes, prepNotes, charLabel, cryptoRng, seededRng, prefOf, plural, rolesOf, scriptOf, shiftLabel, modLabel, modTag, demonShift };
 })();
 /*CORE-END*/
 </script>
@@ -746,12 +850,12 @@ var BOTC = (function () {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // choices are kept per script; the player count is shared
-  let state = { script: "tb", players: 8, prefs: { tb: {}, bmr: {} } };
+  let state = { script: "tb", players: 8, prefs: { tb: {}, bmr: {}, snv: {} } };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || "null");
     const old = JSON.parse(localStorage.getItem(OLD_STORE) || "null");
-    if (saved && saved.players) state = { script: B.SCRIPTS[saved.script] ? saved.script : "tb", players: saved.players, prefs: Object.assign({ tb: {}, bmr: {} }, saved.prefs) };
-    else if (old && old.players) state = { script: "tb", players: old.players, prefs: { tb: old.pref || {}, bmr: {} } };
+    if (saved && saved.players) state = { script: B.SCRIPTS[saved.script] ? saved.script : "tb", players: saved.players, prefs: Object.assign({ tb: {}, bmr: {}, snv: {} }, saved.prefs) };
+    else if (old && old.players) state = { script: "tb", players: old.players, prefs: { tb: old.pref || {}, bmr: {}, snv: {} } };
   } catch (e) {}
   let result = null, staleKey = null;
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
@@ -763,7 +867,7 @@ var BOTC = (function () {
 
   /* ----- script switcher ----- */
   const switchEl = $("script-switch");
-  switchEl.innerHTML = Object.values(B.SCRIPTS).map(s => `<button type="button" data-script="${s.id}" aria-pressed="false">${esc(s.name)}</button>`).join("");
+  switchEl.innerHTML = Object.values(B.SCRIPTS).map(s => `<button type="button" data-script="${s.id}" aria-pressed="false" aria-label="${esc(s.name)}" title="${esc(s.name)}"><span class="long">${esc(s.name)}</span><span class="short" aria-hidden="true">${esc(s.short)}</span></button>`).join("");
   switchEl.addEventListener("click", e => {
     const b = e.target.closest("button[data-script]");
     if (!b || b.dataset.script === state.script) return;
@@ -838,7 +942,11 @@ var BOTC = (function () {
     const modIn = !!mod && (mp === "include" || (a.ok && a.forcedMod));
     const fit = a.ok && a.feasible ? a.feasible.find(f => f.mod) : null;
     const shifts = modIn ? (fit ? fit.shifts : B.BY_ID[mod].modifier) : [];
-    const shift = shifts.length === 1 ? shifts[0] : 0;
+    // a pinned or forced Demon that changes the counts (Fang Gu, Vigormortis)
+    const dmods = S().demonMods, pinnedDm = B.rolesOf(state.script).find(r => r.team === "demon" && B.prefOf(cfg(), r.id) === "include");
+    const dm = dmods.length ? (pinnedDm ? pinnedDm.id : a.ok ? a.forcedDemon : null) : null;
+    const dShift = dm ? B.demonShift(dm, OS) : 0;
+    const shift = (shifts.length === 1 ? shifts[0] : 0) + dShift;
     const tf = TF - shift, os = OS + shift, tr = n - real;
     const segs = [["b-tf", tf, "Townsfolk"], ["b-os", os, "Outsiders"], ["b-mn", MN, "Minions"], ["b-dm", 1, "Demon"], ["b-tr", tr, "Travellers"]].filter(s => s[1] > 0);
     $("bar").innerHTML = segs.map(([c, v]) => `<div class="${c}" style="flex-grow:${v}">${v}</div>`).join("");
@@ -846,6 +954,8 @@ var BOTC = (function () {
     let note = "";
     if (modIn) note = shifts.length === 1 ? `${modName}: ${B.shiftLabel(shift)}` : `${modName}: ${B.modTag(mod)}, chosen at random`;
     else if (mod && mp === "auto") note = mod === "baron" ? "A random Baron shifts 2 Townsfolk to Outsiders" : `A random ${modName} adds or removes 1 Outsider`;
+    if (dm && B.BY_ID[dm].modifier) note = `${B.BY_ID[dm].name}: ${B.modLabel({ shift: dShift })}`;
+    else if (dmods.length && !dm) note = "Demon: " + dmods.map(id => { const d = B.BY_ID[id].modifier[0]; return `a ${B.BY_ID[id].name} ${d > 0 ? "adds" : "removes"} ${Math.abs(d)}`; }).join(", ") + " Outsider";
     $("legend").innerHTML = segs.map(s => `<span>${s[2]} <b>${s[1]}</b></span>`).join("") + (note ? `<span>${esc(note)}</span>` : "");
 
     // tiles
@@ -858,6 +968,8 @@ var BOTC = (function () {
       let f = "";
       if (locked) f = "Always in play: the only Demon";
       else if (r.id === mod && a.ok && a.forcedMod) f = "Added automatically so your choices fit";
+      else if (r.team === "demon" && a.ok && a.forcedDemon === r.id) f = "Added automatically so your choices fit";
+      else if (r.team === "demon" && a.ok && a.fittingDemons && v === "auto" && !a.fittingDemons.includes(r.id)) f = "Can't fit your other choices";
       else if (r.id === "drunk" && v === "include") f = "A spare Townsfolk token goes in the bag as its decoy";
       else if (r.id === "lunatic" && v === "include") f = "Thinks they're the Demon; the real Demon learns who they are";
       flag.textContent = f; flag.hidden = !f;
@@ -868,7 +980,8 @@ var BOTC = (function () {
     const slotsFor = { townsfolk: tf, outsider: os, minion: MN, demon: 1 };
     for (const t of B.TEAMS) {
       const el = $("budget-" + t), k = incCount(t), s = slotsFor[t];
-      el.textContent = `${k} in · ${s} slot${s === 1 ? "" : "s"}${shift && (t === "townsfolk" || t === "outsider") ? ` with ${modName}` : ""}`;
+      const by = [shift - dShift ? modName : "", dShift ? B.BY_ID[dm].name : ""].filter(Boolean).join(" and ");
+      el.textContent = `${k} in · ${s} slot${s === 1 ? "" : "s"}${by && (t === "townsfolk" || t === "outsider") ? ` with ${by}` : ""}`;
       el.classList.toggle("over", k > s);
     }
 
@@ -910,11 +1023,11 @@ var BOTC = (function () {
     const group = (t, list) => `<div class="grp"><span class="grp-name ${B.GOOD(t) ? "t-good" : "t-evil"}">${B.plural(list.length, t)} · ${list.length}</span>${
       list.length ? list.map(id => {
         const r = B.BY_ID[id];
-        const tags = (pinned.has(id) && !(t === "demon" && SS.demons.length === 1) ? `<span class="pin">pinned</span>` : "") + (s.modifier && id === s.modifier.id && s.autoModifier ? `<span class="pin">added so your choices fit</span>` : "");
+        const tags = (pinned.has(id) && !(t === "demon" && SS.demons.length === 1) ? `<span class="pin">pinned</span>` : "") + ((s.modifier && id === s.modifier.id && s.autoModifier) || (t === "demon" && s.autoDemon) ? `<span class="pin">added so your choices fit</span>` : "");
         let extra = "";
         if (id === "drunk" && s.decoy) extra = `<span class="ab">Thinks they are the <b>${esc(nm(s.decoy))}</b>. Put the ${esc(nm(s.decoy))} token in the bag.</span>`;
         if (id === "lunatic" && s.lunaticAs) extra = `<span class="ab">Thinks they are the <b>${esc(nm(s.lunaticAs))}</b>.</span>`;
-        if (s.modifier && id === s.modifier.id) extra = `<span class="ab">This game: <b>${esc(B.shiftLabel(s.modifier.shift))}</b>.</span>`;
+        if (s.modifier && id === s.modifier.id) extra = `<span class="ab">This game: <b>${esc(B.modLabel(s.modifier))}</b>.</span>`;
         return `<div class="ch ${B.GOOD(t) ? "" : "evil"}"><span class="nm"><b>${esc(r.name)}</b>${tags}</span><span class="ab">${esc(r.ability)}</span>${extra}</div>`;
       }).join("") : `<span class="muted">None this game</span>`}</div>`;
 
@@ -929,15 +1042,17 @@ var BOTC = (function () {
       let ctl = "";
       if (i.key === "fortuneteller") ctl = select("redherring", "Red Herring", i.redHerring, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team)), id => B.charLabel(s, id));
       if (i.key === "grandmother") ctl = select("grandchild", "Grandchild", i.grandchild, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team) && id !== "grandmother"), id => B.charLabel(s, id));
+      if (i.key === "eviltwin") ctl = select("twin", "Good Twin", i.twin, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team)), id => B.charLabel(s, id));
       prep.push(Object.assign({ key: l.fixed || (i.key === "lunatic" && !i.bluffs.length) ? null : i.key, ctl }, l));
     });
     B.seatNotes(s).forEach(n => prep.push(n));
+    B.prepNotes(s).forEach(n => prep.push(n));
 
     el.innerHTML = `
       <div class="res-head">
         <span class="eyebrow">${esc(SS.name)} setup</span>
         <h2>${s.players} players${s.travellers ? ` · 15 + ${s.travellers} Travellers` : ""}</h2>
-        <p class="summary">${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${B.plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${B.plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` · ${esc(nm(s.modifier.id))} ${esc(B.shiftLabel(s.modifier.shift))}` : ""}</p>
+        <p class="summary">${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${B.plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${B.plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` · ${esc(nm(s.modifier.id))} ${esc(B.modLabel(s.modifier))}` : ""}</p>
         ${stale ? `<p class="stale">Your choices changed since this was generated. Press Generate to update.</p>` : ""}
         <div class="actions"><button type="button" class="btn small" id="reroll">Re-roll</button><button type="button" class="btn small" id="copy">Copy as text</button></div>
         <div id="copy-fallback"></div>
@@ -959,7 +1074,7 @@ var BOTC = (function () {
 
     $("reroll").addEventListener("click", () => { if (B.analyze(cfg()).ok) run(); });
     $("copy").addEventListener("click", copyText);
-    const SET = { decoy: B.setDecoy, redherring: B.setRedHerring, lunatic: B.setLunaticDemon, grandchild: B.setGrandchild };
+    const SET = { decoy: B.setDecoy, redherring: B.setRedHerring, lunatic: B.setLunaticDemon, grandchild: B.setGrandchild, twin: B.setTwin };
     el.querySelectorAll("select[data-set]").forEach(sel => sel.addEventListener("change", () => {
       result = SET[sel.dataset.set](result, sel.value);
       renderResult(cfgKey() !== staleKey);

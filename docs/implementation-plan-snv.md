@@ -1,7 +1,9 @@
 # BOTC Generator — Implementation Plan (v3: Sects & Violets)
 *Adds Sects & Violets as a third script. Builds on `research-snv.md` and the v2 plan in `implementation-plan-bmr.md`. Oct 17, 2026.*
 
-> **Status:** proposed, not started. The decisions in §9 need an answer before milestone 1.
+> **Status (Oct 17, 2026): built.** Decisions in §9 confirmed as recommended: random Good Twin with dropdown + Re-pick; Demon uniform among the Demons that fit; Vortox / Fang Gu / Pit-Hag prep notes; property run trimmed to 3000 configs per player count per script; TB / BMR / S&V labels on phones.
+>
+> **Differences from this plan:** `S.mods` became `S.mod` (the Minion, unchanged) plus `S.demonMods`. Prep notes are a separate `prepNotes()` next to `seatNotes()` instead of a renamed function with a `kind` field. When no Demon fits, the message names the Demons that would fit, or explains the counts for the pinned Demon (or an unshifted one).
 
 ---
 
