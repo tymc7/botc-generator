@@ -1,7 +1,9 @@
 # BOTC Generator — Implementation Plan (v2: Bad Moon Rising)
 *Adds Bad Moon Rising alongside Trouble Brewing. Builds on `research-bmr.md` and the v1 plan in `implementation-plan.md`. Oct 17, 2026.*
 
-> **Status:** proposed, not started. The decisions marked **[decide]** in §9 need an answer before milestone 2.
+> **Status (Oct 17, 2026): built.** Decisions in §9 confirmed as recommended: random Godfather direction; the Lunatic thinks they are the real Demon by default; fake tokens respect exclusions; the Lunatic gets their own bluffs; page renamed "Clocktower Setup Generator".
+>
+> **Differences from this plan:** no separate handler objects. Character-specific behaviour stays as small branches in the core, since only four characters need it. One Outsider-changing Minion per script is supported (asserted in the data). The Lunatic's night-1 row is shown at every player count; the fake Minions and bluffs are only at 7+.
 
 ---
 

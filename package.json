@@ -4,7 +4,7 @@
   "private": true,
   "description": "Storyteller setup generator for Blood on the Clocktower: Trouble Brewing.",
   "scripts": {
-    "test": "node tests/test-generator.js",
+    "test": "node tests/test-generator.js && node tests/golden.js",
     "start": "python3 -m http.server 8000"
   },
   "engines": {

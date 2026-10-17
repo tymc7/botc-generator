@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trouble Brewing Generator</title>
-<meta name="description" content="Storyteller tool that generates a legal Blood on the Clocktower: Trouble Brewing setup, with characters you can pin in or rule out.">
+<title>Clocktower Setup Generator</title>
+<meta name="description" content="Storyteller tool that generates a legal Blood on the Clocktower setup for Trouble Brewing or Bad Moon Rising, with characters you can pin in or rule out.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23a6252c'/%3E%3Cpath d='M16 7v9l6 4' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -119,6 +119,10 @@ button{font:inherit;color:inherit}
 .seg3 button[aria-pressed="true"][data-v="auto"]{background:var(--sunk);color:var(--ink)}
 .seg3 button[aria-pressed="true"][data-v="exclude"]{background:var(--muted);color:var(--surface)}
 .seg3 button:disabled{cursor:default}
+.top-side{display:grid;gap:8px;justify-items:end}
+.script-switch button{padding:7px 14px;font-size:.85rem}
+.script-switch button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+@media (max-width:640px){.top-side{justify-items:start}}
 
 /* result */
 .result{grid-area:result;padding:20px;display:grid;gap:20px;align-content:start}
@@ -168,10 +172,13 @@ footer{grid-column:1/-1;font-size:.78rem;color:var(--muted);border-top:1px solid
 <div class="app">
   <header class="top">
     <div style="display:grid;gap:6px">
-      <span class="eyebrow">Storyteller tool · Trouble Brewing</span>
-      <h1>Trouble Brewing Generator</h1>
+      <span class="eyebrow" id="eyebrow">Storyteller tool · Trouble Brewing</span>
+      <h1>Clocktower Setup Generator</h1>
     </div>
-    <p class="sub">Pick a player count, pin or ban characters, generate a legal setup.</p>
+    <div class="top-side">
+      <div class="seg3 script-switch" id="script-switch" role="group" aria-label="Script"></div>
+      <p class="sub">Pick a script and player count, pin or ban characters, generate a legal setup.</p>
+    </div>
   </header>
 
   <section class="panel controls" aria-label="Game size">
@@ -219,40 +226,81 @@ var BOTC = (function () {
   "use strict";
 
   /* ---------- DATA ---------- */
+  // first / other: position in the official night sheet (lower wakes earlier)
+  // modifier: the Outsider change a setup Minion can make (the Storyteller picks one)
   const ROLES = [
-    { id: "washerwoman", name: "Washerwoman", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Townsfolk.", first: 20, firstNote: "Point to the TOWNSFOLK and WRONG players, then show the Townsfolk token.", reminders: ["Townsfolk", "Wrong"] },
-    { id: "librarian", name: "Librarian", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Outsider. (Or that zero are in play.)", first: 30, firstNote: "Point to the OUTSIDER and WRONG players, then show the Outsider token (or show 0).", reminders: ["Outsider", "Wrong"] },
-    { id: "investigator", name: "Investigator", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Minion.", first: 40, firstNote: "Point to the MINION and WRONG players, then show the Minion token.", reminders: ["Minion", "Wrong"] },
-    { id: "chef", name: "Chef", team: "townsfolk", ability: "You start knowing how many pairs of evil players there are.", first: 50, firstNote: "Show fingers for the number of adjacent evil pairs.", reminders: [] },
-    { id: "empath", name: "Empath", team: "townsfolk", ability: "Each night, you learn how many of your 2 alive neighbors are evil.", first: 60, other: 60, firstNote: "Show fingers (0, 1, 2) for evil alive neighbours.", otherNote: "Show fingers (0, 1, 2) for evil alive neighbours.", reminders: [] },
-    { id: "fortuneteller", name: "Fortune Teller", team: "townsfolk", ability: "Each night, choose 2 players: you learn if either is a Demon. There is a good player that registers as a Demon to you.", first: 70, other: 70, firstNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", otherNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", reminders: ["Red Herring"] },
-    { id: "undertaker", name: "Undertaker", team: "townsfolk", ability: "Each night*, you learn which character died by execution today.", other: 80, otherNote: "If someone was executed today, show their character token.", reminders: ["Executed"] },
-    { id: "monk", name: "Monk", team: "townsfolk", ability: "Each night*, choose a player (not yourself): they are safe from the Demon tonight.", other: 20, otherNote: "They point to a player (not themself). Mark them SAFE.", reminders: ["Safe"] },
-    { id: "ravenkeeper", name: "Ravenkeeper", team: "townsfolk", ability: "If you die at night, you are woken to choose a player: you learn their character.", other: 50, otherNote: "If they died tonight, they point to a player. Show that character token.", reminders: [] },
+    // Trouble Brewing
+    { id: "washerwoman", name: "Washerwoman", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Townsfolk.", first: 51, firstNote: "Point to the TOWNSFOLK and WRONG players, then show the Townsfolk token.", reminders: ["Townsfolk", "Wrong"] },
+    { id: "librarian", name: "Librarian", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Outsider. (Or that zero are in play.)", first: 52, firstNote: "Point to the OUTSIDER and WRONG players, then show the Outsider token (or show 0).", reminders: ["Outsider", "Wrong"] },
+    { id: "investigator", name: "Investigator", team: "townsfolk", ability: "You start knowing that 1 of 2 players is a particular Minion.", first: 53, firstNote: "Point to the MINION and WRONG players, then show the Minion token.", reminders: ["Minion", "Wrong"] },
+    { id: "chef", name: "Chef", team: "townsfolk", ability: "You start knowing how many pairs of evil players there are.", first: 54, firstNote: "Show fingers for the number of adjacent evil pairs.", reminders: [] },
+    { id: "empath", name: "Empath", team: "townsfolk", ability: "Each night, you learn how many of your 2 alive neighbors are evil.", first: 55, other: 75, firstNote: "Show fingers (0, 1, 2) for evil alive neighbours.", otherNote: "Show fingers (0, 1, 2) for evil alive neighbours.", reminders: [] },
+    { id: "fortuneteller", name: "Fortune Teller", team: "townsfolk", ability: "Each night, choose 2 players: you learn if either is a Demon. There is a good player that registers as a Demon to you.", first: 56, other: 76, firstNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", otherNote: "They point to 2 players. Nod if either is the Demon or the Red Herring.", reminders: ["Red Herring"] },
+    { id: "undertaker", name: "Undertaker", team: "townsfolk", ability: "Each night*, you learn which character died by execution today.", other: 77, otherNote: "If someone was executed today, show their character token.", reminders: ["Executed"] },
+    { id: "monk", name: "Monk", team: "townsfolk", ability: "Each night*, choose a player (not yourself): they are safe from the Demon tonight.", other: 23, otherNote: "They point to a player. Mark them SAFE.", reminders: ["Safe"] },
+    { id: "ravenkeeper", name: "Ravenkeeper", team: "townsfolk", ability: "If you die at night, you are woken to choose a player: you learn their character.", other: 74, otherNote: "If they died tonight, they point to a player. Show that player's character token.", reminders: [] },
     { id: "virgin", name: "Virgin", team: "townsfolk", ability: "The 1st time you are nominated, if the nominator is a Townsfolk, they are executed immediately.", reminders: ["No Ability"] },
     { id: "slayer", name: "Slayer", team: "townsfolk", ability: "Once per game, during the day, publicly choose a player: if they are the Demon, they die.", reminders: ["No Ability"] },
     { id: "soldier", name: "Soldier", team: "townsfolk", ability: "You are safe from the Demon.", reminders: [] },
     { id: "mayor", name: "Mayor", team: "townsfolk", ability: "If only 3 players live & no execution occurs, your team wins. If you die at night, another player might die instead.", reminders: [] },
-    { id: "butler", name: "Butler", team: "outsider", ability: "Each night, choose a player (not yourself): tomorrow, you may only vote if they are voting too.", first: 80, other: 90, firstNote: "They point to a player. Mark them MASTER.", otherNote: "They point to a player. Mark them MASTER.", reminders: ["Master"] },
+    { id: "butler", name: "Butler", team: "outsider", ability: "Each night, choose a player (not yourself): tomorrow, you may only vote if they are voting too.", first: 57, other: 90, firstNote: "They point to a player. Mark them MASTER.", otherNote: "They point to a player. Mark them MASTER.", reminders: ["Master"] },
     { id: "drunk", name: "Drunk", team: "outsider", ability: "You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.", reminders: ["Is the Drunk"], setup: true },
     { id: "recluse", name: "Recluse", team: "outsider", ability: "You might register as evil & as a Minion or Demon, even if dead.", reminders: [] },
     { id: "saint", name: "Saint", team: "outsider", ability: "If you die by execution, your team loses.", reminders: [] },
-    { id: "poisoner", name: "Poisoner", team: "minion", ability: "Each night, choose a player: they are poisoned tonight and tomorrow day.", first: 10, other: 10, firstNote: "They point to a player. Mark them POISONED.", otherNote: "They point to a player. Mark them POISONED.", reminders: ["Poisoned"] },
-    { id: "spy", name: "Spy", team: "minion", ability: "Each night, you see the Grimoire. You might register as good & as a Townsfolk or Outsider, even if dead.", first: 90, other: 100, firstNote: "Show the Grimoire for as long as they need.", otherNote: "Show the Grimoire for as long as they need.", reminders: [] },
-    { id: "scarletwoman", name: "Scarlet Woman", team: "minion", ability: "If there are 5 or more players alive & the Demon dies, you become the Demon. (Travellers don't count.)", other: 30, otherNote: "If she became the Demon today, show YOU ARE and the Imp token.", reminders: ["Is the Demon"] },
-    { id: "baron", name: "Baron", team: "minion", ability: "There are extra Outsiders in play. [+2 Outsiders]", reminders: [], setup: true },
-    { id: "imp", name: "Imp", team: "demon", ability: "Each night*, choose a player: they die. If you kill yourself this way, a Minion becomes the Imp.", other: 40, otherNote: "They point to a player, who dies. If they chose themself, wake a Minion and show YOU ARE and the Imp token.", reminders: ["Dead"] }
+    { id: "poisoner", name: "Poisoner", team: "minion", ability: "Each night, choose a player: they are poisoned tonight and tomorrow day.", first: 32, other: 16, firstNote: "They point to a player. Mark them POISONED.", otherNote: "They point to a player. Mark them POISONED.", reminders: ["Poisoned"] },
+    { id: "spy", name: "Spy", team: "minion", ability: "Each night, you see the Grimoire. You might register as good & as a Townsfolk or Outsider, even if dead.", first: 71, other: 91, firstNote: "Show the Grimoire for as long as they need.", otherNote: "Show the Grimoire for as long as they need.", reminders: [] },
+    { id: "scarletwoman", name: "Scarlet Woman", team: "minion", ability: "If there are 5 or more players alive & the Demon dies, you become the Demon. (Travellers don't count.)", other: 32, otherNote: "If she became the Demon today, show YOU ARE and the Imp token.", reminders: ["Is the Demon"] },
+    { id: "baron", name: "Baron", team: "minion", ability: "There are extra Outsiders in play. [+2 Outsiders]", reminders: [], setup: true, modifier: [2] },
+    { id: "imp", name: "Imp", team: "demon", ability: "Each night*, choose a player: they die. If you kill yourself this way, a Minion becomes the Imp.", other: 39, otherNote: "They point to a player, who dies. If they chose themself, wake a Minion and show YOU ARE and the Imp token.", reminders: ["Dead"] },
+    // Bad Moon Rising
+    { id: "grandmother", name: "Grandmother", team: "townsfolk", ability: "You start knowing a good player & their character. If the Demon kills them, you die too.", first: 58, other: 72, firstNote: "Point to the GRANDCHILD player and show their character token.", otherNote: "If the Demon killed the Grandchild tonight, the Grandmother dies too.", reminders: ["Grandchild", "Dead"] },
+    { id: "sailor", name: "Sailor", team: "townsfolk", ability: "Each night, choose an alive player: either you or they are drunk until dusk. You can't die.", first: 25, other: 12, firstNote: "They point to a living player. Mark either them or the Sailor DRUNK.", otherNote: "They point to a living player. Mark either them or the Sailor DRUNK.", reminders: ["Drunk"] },
+    { id: "chambermaid", name: "Chambermaid", team: "townsfolk", ability: "Each night, choose 2 alive players (not yourself): you learn how many woke tonight due to their ability.", first: 75, other: 94, firstNote: "They point to 2 living players. Show fingers for how many woke tonight due to their ability.", otherNote: "They point to 2 living players. Show fingers for how many woke tonight due to their ability.", reminders: [] },
+    { id: "exorcist", name: "Exorcist", team: "townsfolk", ability: "Each night*, choose a player (different to last night): the Demon, if chosen, learns who you are then doesn't wake tonight.", other: 35, otherNote: "They point to a player (not last night's). If it's the Demon, wake the Demon and point to the Exorcist; the Demon doesn't act tonight.", reminders: ["Chosen"] },
+    { id: "innkeeper", name: "Innkeeper", team: "townsfolk", ability: "Each night*, choose 2 players: they can't die tonight, but 1 is drunk until dusk.", other: 18, otherNote: "They point to 2 players. Mark both SAFE and one of them DRUNK.", reminders: ["Safe", "Safe", "Drunk"] },
+    { id: "gambler", name: "Gambler", team: "townsfolk", ability: "Each night*, choose a player & guess their character: if you guess wrong, you die.", other: 20, otherNote: "They point to a player and a character. If wrong, the Gambler dies.", reminders: ["Dead"] },
+    { id: "gossip", name: "Gossip", team: "townsfolk", ability: "Each day, you may make a public statement. Tonight, if it was true, a player dies.", other: 57, otherNote: "If their statement today was true, choose a player to die.", reminders: ["Dead"] },
+    { id: "courtier", name: "Courtier", team: "townsfolk", ability: "Once per game, at night, choose a character: they are drunk for 3 nights & 3 days.", first: 34, other: 17, firstNote: "They may choose a character. If it's in play, that player is DRUNK for 3 nights and 3 days.", otherNote: "They may choose a character. If it's in play, that player is DRUNK for 3 nights and 3 days.", reminders: ["Drunk 3", "Drunk 2", "Drunk 1", "No Ability"] },
+    { id: "professor", name: "Professor", team: "townsfolk", ability: "Once per game, at night*, choose a dead player: if they are a Townsfolk, they are resurrected.", other: 64, otherNote: "They may choose a dead player. If it's a Townsfolk, they come back to life.", reminders: ["Alive", "No Ability"] },
+    { id: "minstrel", name: "Minstrel", team: "townsfolk", ability: "When a Minion dies by execution, all other players (except Travellers) are drunk until dusk tomorrow.", reminders: ["Everyone Is Drunk"] },
+    { id: "tealady", name: "Tea Lady", team: "townsfolk", ability: "If both your alive neighbors are good, they can't die.", reminders: ["Cannot Die", "Cannot Die"] },
+    { id: "pacifist", name: "Pacifist", team: "townsfolk", ability: "Executed good players might not die.", reminders: [] },
+    { id: "fool", name: "Fool", team: "townsfolk", ability: "The 1st time you die, you don't.", reminders: ["No Ability"] },
+    { id: "goon", name: "Goon", team: "outsider", ability: "Each night, the 1st player to choose you with their ability is drunk until dusk. You become their alignment.", reminders: ["Drunk"] },
+    { id: "lunatic", name: "Lunatic", team: "outsider", ability: "You think you are a Demon, but you are not. The Demon knows who you are & who you choose at night.", first: 21, other: 34, firstNote: "Wake them as the Demon: at 7+ players, show THESE ARE YOUR MINIONS (any players) and 3 good bluffs. Then show the real Demon THIS PLAYER IS and the Lunatic token.", otherNote: "They \"attack\" as their Demon; mark CHOSEN. Wake the real Demon and show them the Lunatic and their choices.", reminders: ["Chosen", "Chosen", "Chosen"], setup: true },
+    { id: "tinker", name: "Tinker", team: "outsider", ability: "You might die at any time.", other: 70, otherNote: "The Tinker might die.", reminders: ["Dead"] },
+    { id: "moonchild", name: "Moonchild", team: "outsider", ability: "When you learn that you died, publicly choose 1 alive player. Tonight, if it was a good player, they die.", other: 71, otherNote: "If the player the Moonchild chose today is good, they die.", reminders: ["Dead"] },
+    { id: "godfather", name: "Godfather", team: "minion", ability: "You start knowing which Outsiders are in play. If 1 died today, choose a player tonight: they die. [-1 or +1 Outsider]", first: 37, other: 56, firstNote: "Show the tokens of every Outsider in play.", otherNote: "If an Outsider died today, they point to a player, who dies.", reminders: ["Died Today", "Dead"], setup: true, modifier: [-1, 1] },
+    { id: "devilsadvocate", name: "Devil's Advocate", team: "minion", ability: "Each night, choose a living player (different to last night): if executed tomorrow, they don't die.", first: 39, other: 25, firstNote: "They point to a living player. Mark them SURVIVES EXECUTION.", otherNote: "They point to a living player (not last night's). Mark them SURVIVES EXECUTION.", reminders: ["Survives Execution"] },
+    { id: "assassin", name: "Assassin", team: "minion", ability: "Once per game, at night*, choose a player: they die, even if for some reason they could not.", other: 55, otherNote: "Once per game, they may point to a player, who dies even if protected.", reminders: ["Dead", "No Ability"] },
+    { id: "mastermind", name: "Mastermind", team: "minion", ability: "If the Demon dies by execution (ending the game), play for 1 more day. If a player is then executed, their team loses.", reminders: [] },
+    { id: "zombuul", name: "Zombuul", team: "demon", ability: "Each night*, if no-one died today, choose a player: they die. The 1st time you die, you live but register as dead.", other: 40, otherNote: "If no one died today, they point to a player, who dies.", reminders: ["Died Today", "Dead"] },
+    { id: "pukka", name: "Pukka", team: "demon", ability: "Each night, choose a player: they are poisoned. The previously poisoned player dies then becomes healthy.", first: 46, other: 41, firstNote: "They point to a player. Mark them POISONED.", otherNote: "They point to a player to poison. The previously poisoned player dies, then becomes healthy.", reminders: ["Poisoned", "Poisoned", "Dead"] },
+    { id: "shabaloth", name: "Shabaloth", team: "demon", ability: "Each night*, choose 2 players: they die. A dead player you chose last night might be regurgitated.", other: 42, otherNote: "A player they chose last night might come back to life. Then they point to 2 players, who die.", reminders: ["Dead", "Dead", "Alive"] },
+    { id: "po", name: "Po", team: "demon", ability: "Each night*, you may choose a player: they die. If your last choice was no-one, choose 3 players tonight.", other: 43, otherNote: "They may point to a player, who dies. If they chose no one last time, they point to 3.", reminders: ["Dead", "Dead", "Dead", "3 Attacks"] }
   ];
   const BY_ID = Object.fromEntries(ROLES.map(r => [r.id, r]));
+  const SCRIPTS = {
+    tb: { id: "tb", name: "Trouble Brewing", travellers: ["Scapegoat", "Gunslinger", "Beggar", "Bureaucrat", "Thief"],
+      roles: ["washerwoman", "librarian", "investigator", "chef", "empath", "fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin", "slayer", "soldier", "mayor", "butler", "drunk", "recluse", "saint", "poisoner", "spy", "scarletwoman", "baron", "imp"] },
+    bmr: { id: "bmr", name: "Bad Moon Rising", travellers: ["Apprentice", "Matron", "Judge", "Bishop", "Voudon"],
+      roles: ["grandmother", "sailor", "chambermaid", "exorcist", "innkeeper", "gambler", "gossip", "courtier", "professor", "minstrel", "tealady", "pacifist", "fool", "goon", "lunatic", "tinker", "moonchild", "godfather", "devilsadvocate", "assassin", "mastermind", "zombuul", "pukka", "shabaloth", "po"] }
+  };
+  for (const S of Object.values(SCRIPTS)) {
+    S.demons = S.roles.filter(id => BY_ID[id].team === "demon");
+    const mods = S.roles.filter(id => BY_ID[id].modifier);
+    if (mods.length > 1) throw new Error("one Outsider-changing Minion per script");
+    S.mod = mods[0] || null;
+  }
   const TEAMS = ["townsfolk", "outsider", "minion", "demon"];
-  const TEAM_LABEL = { townsfolk: ["Townsfolk", "Townsfolk"], outsider: ["Outsider", "Outsiders"], minion: ["Minion", "Minions"], demon: ["Demon", "Demon"] };
+  const TEAM_LABEL = { townsfolk: ["Townsfolk", "Townsfolk"], outsider: ["Outsider", "Outsiders"], minion: ["Minion", "Minions"], demon: ["Demon", "Demons"] };
   const GOOD = t => t === "townsfolk" || t === "outsider";
   // [Townsfolk, Outsiders, Minions] — Demon is always 1
   const DIST = { 5: [3, 0, 1], 6: [3, 1, 1], 7: [5, 0, 1], 8: [5, 1, 1], 9: [5, 2, 1], 10: [7, 0, 2], 11: [7, 1, 2], 12: [7, 2, 2], 13: [9, 0, 3], 14: [9, 1, 3], 15: [9, 2, 3] };
   const MIN_PLAYERS_FOR_MINIONS = { 1: 5, 2: 10, 3: 13 };
   const SYS_FIRST = [
-    { id: "_minioninfo", label: "Minion info", order: 2, note: "Wake the Minions. Show THIS IS THE DEMON and point to the Demon.", min: 7 },
-    { id: "_demoninfo", label: "Demon info", order: 3, note: "Wake the Demon. Show THESE ARE YOUR MINIONS, then the 3 bluffs.", min: 7 }
+    { id: "_minioninfo", label: "Minion info", order: 19, note: "Wake the Minions. Show THIS IS THE DEMON and point to the Demon.", min: 7 },
+    { id: "_demoninfo", label: "Demon info", order: 23, note: "Wake the Demon. Show THESE ARE YOUR MINIONS, then the 3 bluffs.", min: 7 }
   ];
 
   /* ---------- RNG ---------- */
@@ -280,87 +328,113 @@ var BOTC = (function () {
   function pick(arr, rng) { return arr.length ? arr[rng(arr.length)] : null; }
 
   /* ---------- HELPERS ---------- */
-  function prefOf(cfg, id) { if (id === "imp") return "include"; const v = cfg.pref && cfg.pref[id]; return v === "include" || v === "exclude" ? v : "auto"; }
+  const scriptOf = cfg => SCRIPTS[cfg && cfg.script] || SCRIPTS.tb;
+  const rolesOf = script => (SCRIPTS[script] || SCRIPTS.tb).roles.map(id => BY_ID[id]);
+  function prefOf(cfg, id) {
+    if (BY_ID[id].team === "demon" && scriptOf(cfg).demons.length === 1) return "include";
+    const v = cfg.pref && cfg.pref[id]; return v === "include" || v === "exclude" ? v : "auto";
+  }
   const plural = (n, team) => TEAM_LABEL[team][n === 1 ? 0 : 1];
   const slots = (n, w) => `${n} ${w} slot${n === 1 ? "" : "s"}`;
+  const shiftLabel = d => `${d > 0 ? "+" : "−"}${Math.abs(d)} Outsider${Math.abs(d) === 1 ? "" : "s"}`;
+  // "+2 Outsiders" (Baron), "−1 or +1 Outsider" (Godfather)
+  function modTag(id) {
+    const ds = BY_ID[id].modifier;
+    return ds.map(d => (d > 0 ? "+" : "−") + Math.abs(d)).join(" or ") + (ds.every(d => Math.abs(d) === 1) ? " Outsider" : " Outsiders");
+  }
 
   /* ---------- ANALYZE (feasibility + conflict messages) ---------- */
   function analyze(cfg) {
     const players = Math.round(Number(cfg.players));
     if (!(players >= 5 && players <= 20)) return { ok: false, errors: ["Choose between 5 and 20 players."] };
+    const S = scriptOf(cfg), roles = S.roles.map(id => BY_ID[id]);
     const real = Math.min(players, 15), travellers = players - real;
     const [TF, OS, MN] = DIST[real];
     const p = id => prefOf(cfg, id);
-    const ids = (team, f) => ROLES.filter(r => r.team === team && f(r.id)).map(r => r.id);
+    const ids = (team, f) => roles.filter(r => r.team === team && f(r.id)).map(r => r.id);
     const inc = {}, nonEx = {};
     for (const t of TEAMS) { inc[t] = ids(t, id => p(id) === "include"); nonEx[t] = ids(t, id => p(id) !== "exclude"); }
-    const bp = p("baron");
-    const states = bp === "include" ? [true] : bp === "exclude" ? [false] : [false, true];
+    // mod: the Minion that changes the Outsider count (Baron, Godfather)
+    const mod = S.mod, mp = mod ? p(mod) : "exclude", shifts = mod ? BY_ID[mod].modifier : [];
+    const states = !mod ? [false] : mp === "include" ? [true] : mp === "exclude" ? [false] : [false, true];
 
-    function check(b) {
+    function check(b, d) {
       const e = [];
-      const tf = TF - (b ? 2 : 0), os = OS + (b ? 2 : 0);
-      const incMn = inc.minion.filter(x => x !== "baron").length + (b ? 1 : 0);
-      const availMn = nonEx.minion.filter(x => b || x !== "baron").length;
+      const tf = TF - d, os = OS + d;
+      const incMn = inc.minion.filter(x => x !== mod).length + (b ? 1 : 0);
+      const availMn = nonEx.minion.filter(x => b || x !== mod).length;
       if (incMn > MN) e.push({ code: "mnOver", n: incMn, slots: MN });
       else if (availMn < MN) e.push({ code: "mnShort", n: availMn, need: MN });
-      if (inc.townsfolk.length > tf) e.push({ code: "tfOver", n: inc.townsfolk.length, slots: tf, baron: b });
+      if (inc.townsfolk.length > tf) e.push({ code: "tfOver", n: inc.townsfolk.length, slots: tf, mod: b });
       else if (nonEx.townsfolk.length < tf) e.push({ code: "tfShort", n: nonEx.townsfolk.length, need: tf });
       const drunkOk = nonEx.townsfolk.length >= tf + 1;
       if (inc.outsider.includes("drunk") && !drunkOk && nonEx.townsfolk.length >= tf) e.push({ code: "drunkDecoy" });
-      if (inc.outsider.length > os) e.push({ code: "osOver", n: inc.outsider.length, slots: os, baron: b });
+      if (inc.outsider.length > os) e.push({ code: "osOver", n: inc.outsider.length, slots: os, mod: b });
       else {
         const availOs = nonEx.outsider.filter(x => drunkOk || x !== "drunk" || inc.outsider.includes("drunk")).length;
         if (availOs < os) e.push({ code: "osShort", n: availOs, need: os, drunkBlocked: !drunkOk && nonEx.outsider.includes("drunk") });
       }
       return e;
     }
-    const checks = states.map(b => ({ baron: b, errs: check(b) }));
-    const feasible = checks.filter(c => !c.errs.length).map(c => c.baron);
+    // per state: the Outsider shifts that fit, or the errors of the closest one
+    const checks = states.map(b => {
+      if (!b) { const errs = check(false, 0); return { mod: false, shifts: errs.length ? [] : [0], errs }; }
+      const opts = shifts.filter(d => OS + d >= 0).map(d => ({ d, errs: check(true, d) }));
+      const fit = opts.filter(o => !o.errs.length);
+      const best = opts.reduce((x, y) => y.errs.length < x.errs.length ? y : x);
+      return { mod: true, shifts: fit.map(o => o.d), errs: fit.length ? [] : best.errs };
+    });
+    const feasible = checks.filter(c => !c.errs.length);
 
     let errors = [];
+    if (inc.demon.length > 1) errors.push(`You included ${inc.demon.length} Demons, but only one can be in play. Keep one.`);
+    else if (!nonEx.demon.length) errors.push("Every Demon is excluded. Allow at least one.");
     if (!feasible.length) {
-      const msg = e => message(e, real, bp);
-      if (bp === "auto") {
+      const msg = e => message(e, real, mp, S);
+      if (mp === "auto") {
         const fe = checks[0].errs, te = checks[1].errs;
+        const up = Math.max(0, ...shifts);
         const over = fe.find(e => e.code === "osOver");
-        if (over && over.n <= OS + 2 && te.length) {
+        if (over && over.n <= OS + up && te.length) {
           const why = te[0];
           let reason;
           if (why.code === "mnOver") reason = "but your included Minions already fill every Minion slot.";
           else if (why.code === "tfOver") reason = `but that leaves ${slots(why.slots, "Townsfolk")} for your ${why.n} included Townsfolk.`;
           else reason = "but: " + msg(why);
-          errors.push(`You included ${over.n} ${plural(over.n, "outsider")}, but ${real} players have ${slots(OS, "Outsider")}. The Baron (+2 Outsiders) would make room, ${reason}`);
+          errors.push(`You included ${over.n} ${plural(over.n, "outsider")}, but ${real} players have ${slots(OS, "Outsider")}. The ${BY_ID[mod].name} (${modTag(mod)}) would make room, ${reason}`);
           fe.filter(e => e !== over).forEach(e => errors.push(msg(e)));
-        } else if (over && over.n > OS + 2) {
-          errors.push(msg({ code: "osOver", n: over.n, slots: OS + 2, baron: true }));
+        } else if (over && over.n > OS + up) {
+          errors.push(msg({ code: "osOver", n: over.n, slots: OS + up, mod: true }));
           fe.filter(e => e !== over).forEach(e => errors.push(msg(e)));
         } else fe.forEach(e => errors.push(msg(e)));
       } else checks[0].errs.forEach(e => errors.push(msg(e)));
       errors = [...new Set(errors)];
     }
-    const forcedBaron = bp === "auto" && feasible.length === 1 && feasible[0] === true;
-    const baronPossible = feasible.includes(true);
-    return { ok: feasible.length > 0, errors, players, real, travellers, base: { tf: TF, os: OS, mn: MN }, feasible, forcedBaron, baronPossible, inc, nonEx };
+    const forcedMod = mp === "auto" && feasible.length === 1 && feasible[0].mod;
+    return { ok: feasible.length > 0 && !errors.length, errors, players, real, travellers, base: { tf: TF, os: OS, mn: MN }, feasible, forcedMod, mod, inc, nonEx, script: S.id };
   }
 
-  function message(e, real, bp) {
+  function message(e, real, mp, S) {
+    const M = S.mod && BY_ID[S.mod].name, tag = S.mod && modTag(S.mod), shifts = S.mod ? BY_ID[S.mod].modifier : [];
+    const up = Math.max(0, ...shifts), down = Math.max(0, ...shifts.map(d => -d));
     switch (e.code) {
       case "mnOver": {
         const need = MIN_PLAYERS_FOR_MINIONS[e.n];
-        const fix = need ? `Raise the player count to ${need} or more, or remove ${e.n - e.slots === 1 ? "one" : "some"}.` : "Trouble Brewing never has more than 3 Minions; remove some.";
+        const fix = need ? `Raise the player count to ${need} or more, or remove ${e.n - e.slots === 1 ? "one" : "some"}.` : `${S.name} never has more than 3 Minions; remove some.`;
         return `You included ${e.n} Minions, but ${real} players have ${slots(e.slots, "Minion")}. ${fix}`;
       }
       case "mnShort": return `Only ${e.n} ${plural(e.n, "minion")} left after exclusions; ${real} players need ${e.need}.`;
-      case "tfOver": return e.baron
-        ? `With the Baron, ${real} players have ${slots(e.slots, "Townsfolk")}, but you included ${e.n}. Remove some Townsfolk or the Baron.`
-        : `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Remove some or raise the player count.`;
+      case "tfOver": return e.mod
+        ? `With the ${M}, ${real} players have ${slots(e.slots, "Townsfolk")}, but you included ${e.n}. Remove some Townsfolk or the ${M}.`
+        : (mp === "exclude" && e.n <= e.slots + down
+          ? `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Allow the ${M} (${tag}) or remove some.`
+          : `You included ${e.n} Townsfolk, but ${real} players have ${slots(e.slots, "Townsfolk")}. Remove some or raise the player count.`);
       case "tfShort": return `Only ${e.n} Townsfolk left after exclusions; this setup needs ${e.need}. Allow more Townsfolk.`;
       case "drunkDecoy": return "The Drunk needs a Townsfolk that isn't in play to pose as, but your exclusions leave none spare. Allow another Townsfolk.";
-      case "osOver": return e.baron
-        ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")} even with the Baron. Remove some or change the player count.`
-        : (bp === "exclude" && e.n <= e.slots + 2
-          ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Allow the Baron (+2 Outsiders) or remove some.`
+      case "osOver": return e.mod
+        ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")} even with the ${M}. Remove some or change the player count.`
+        : (mp === "exclude" && e.n <= e.slots + up
+          ? `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Allow the ${M} (${tag}) or remove some.`
           : `You included ${e.n} ${plural(e.n, "outsider")}, but ${real} players have ${slots(e.slots, "Outsider")}. Remove some or change the player count.`);
       case "osShort": return e.drunkBlocked
         ? `Only ${e.n} usable Outsiders left: the Drunk can't be used because every spare Townsfolk is excluded. Allow more characters.`
@@ -371,23 +445,29 @@ var BOTC = (function () {
 
   /* ---------- GENERATE ---------- */
   const order = (list) => list.slice().sort((x, y) => ROLES.indexOf(BY_ID[x]) - ROLES.indexOf(BY_ID[y]));
-  const bagOf = s => order([...s.townsfolk, ...(s.decoy ? [s.decoy] : []), ...s.outsiders.filter(id => id !== "drunk"), ...s.minions, "imp"]);
+  // the Drunk's token stays out (its decoy goes in); a Lunatic posing as another Demon has that Demon's token instead
+  const lunaticSwapped = s => !!s.lunaticAs && s.lunaticAs !== s.demon;
+  const bagOf = s => order([...s.townsfolk, ...(s.decoy ? [s.decoy] : []),
+    ...s.outsiders.filter(id => id !== "drunk" && !(id === "lunatic" && lunaticSwapped(s))), ...(lunaticSwapped(s) ? [s.lunaticAs] : []),
+    ...s.minions, s.demon]);
   function generate(cfg, rng) {
     rng = rng || cryptoRng();
     const a = analyze(cfg);
     if (!a.ok) return { ok: false, errors: a.errors };
-    const p = id => prefOf(cfg, id);
+    const S = scriptOf(cfg), p = id => prefOf(cfg, id), mod = a.mod;
 
-    // Minions (decides the Baron)
+    // Minions (decides the Outsider-changing Minion)
     let minions = a.inc.minion.slice();
     let mnPool = a.nonEx.minion.filter(id => !minions.includes(id));
     if (a.feasible.length === 1) {
-      if (a.feasible[0] && !minions.includes("baron")) minions.push("baron");
-      mnPool = mnPool.filter(id => id !== "baron");
+      if (a.feasible[0].mod && !minions.includes(mod)) minions.push(mod);
+      mnPool = mnPool.filter(id => id !== mod);
     }
     minions = minions.concat(sample(mnPool, a.base.mn - minions.length, rng));
-    const baron = minions.includes("baron");
-    const tf = a.base.tf - (baron ? 2 : 0), os = a.base.os + (baron ? 2 : 0);
+    const hasMod = !!mod && minions.includes(mod);
+    const shifts = a.feasible.find(f => f.mod === hasMod).shifts;
+    const shift = shifts.length > 1 ? pick(shifts, rng) : shifts[0];
+    const tf = a.base.tf - shift, os = a.base.os + shift;
 
     // Outsiders
     const drunkOk = a.nonEx.townsfolk.length >= tf + 1;
@@ -398,19 +478,27 @@ var BOTC = (function () {
     const tfPool = a.nonEx.townsfolk.filter(id => !a.inc.townsfolk.includes(id));
     const townsfolk = a.inc.townsfolk.concat(sample(tfPool, tf - a.inc.townsfolk.length, rng));
 
+    // Demon
+    const dmPool = a.inc.demon.length ? a.inc.demon : a.nonEx.demon;
+    const demon = dmPool.length > 1 ? pick(dmPool, rng) : dmPool[0];
+
     // Drunk decoy (decoyPool: the Townsfolk the Storyteller may switch it to later)
     const decoyPool = outsiders.includes("drunk") ? order(a.nonEx.townsfolk.filter(id => !townsfolk.includes(id))) : [];
     const decoy = pick(decoyPool, rng);
+    // Lunatic: thinks they are the real Demon until the Storyteller picks another (non-excluded) one
+    const lunatic = outsiders.includes("lunatic");
 
     const setup = {
-      players: a.players, real: a.real, travellers: a.travellers, baron,
-      autoBaron: baron && p("baron") === "auto" && a.forcedBaron,
+      script: S.id, players: a.players, real: a.real, travellers: a.travellers,
+      modifier: hasMod ? { id: mod, shift } : null,
+      autoModifier: hasMod && p(mod) === "auto" && a.forcedMod,
       counts: { townsfolk: tf, outsider: os, minion: a.base.mn, demon: 1 },
-      townsfolk: order(townsfolk), outsiders: order(outsiders), minions: order(minions), demon: "imp",
+      townsfolk: order(townsfolk), outsiders: order(outsiders), minions: order(minions), demon,
       decoy, decoyPool,
-      included: ROLES.filter(r => p(r.id) === "include").map(r => r.id)
+      lunaticAs: lunatic ? demon : null, lunaticPool: lunatic ? order(a.nonEx.demon) : [],
+      included: S.roles.filter(id => p(id) === "include")
     };
-    setup.inPlay = [...setup.townsfolk, ...setup.outsiders, ...setup.minions, "imp"];
+    setup.inPlay = [...setup.townsfolk, ...setup.outsiders, ...setup.minions, demon];
     setup.bag = bagOf(setup);
     setup.bluffs = pickBluffs(setup, rng);
     setup.info = pickInfo(setup, rng);
@@ -426,8 +514,9 @@ var BOTC = (function () {
   function pickBluffs(setup, rng) {
     if (setup.real < 7) return [];
     const used = new Set([...setup.inPlay, setup.decoy].filter(Boolean));
-    const tf = shuffle(ROLES.filter(r => r.team === "townsfolk" && !used.has(r.id)).map(r => r.id), rng);
-    const os = shuffle(ROLES.filter(r => r.team === "outsider" && !used.has(r.id)).map(r => r.id), rng);
+    const roles = rolesOf(setup.script);
+    const tf = shuffle(roles.filter(r => r.team === "townsfolk" && !used.has(r.id)).map(r => r.id), rng);
+    const os = shuffle(roles.filter(r => r.team === "outsider" && !used.has(r.id)).map(r => r.id), rng);
     const out = tf.splice(0, 2).concat(os.splice(0, 1));
     const rest = shuffle(tf.concat(os), rng);
     while (out.length < 3 && rest.length) out.push(rest.pop());
@@ -436,10 +525,13 @@ var BOTC = (function () {
 
   /* ---------- FIRST-NIGHT PICKS (by character) ---------- */
   const INFO_KEYS = { washerwoman: "townsfolk", librarian: "outsider", investigator: "minion" };
+  const grandchildPool = s => s.inPlay.filter(id => GOOD(BY_ID[id].team) && id !== "grandmother");
+  // the Lunatic's fake bluffs: any good characters on the script, in play or not
+  const lunaticBluffPool = s => rolesOf(s.script).filter(r => GOOD(r.team) && r.id !== "lunatic").map(r => r.id);
   function infoSources(setup) {
-    // which info characters act on night 1, and whether it's the Drunk acting as them
+    // which characters need first-night picks, and whether it's the Drunk acting as them
     const src = [];
-    for (const id of ["fortuneteller", "washerwoman", "librarian", "investigator"]) {
+    for (const id of ["fortuneteller", "washerwoman", "librarian", "investigator", "lunatic", "godfather", "grandmother"]) {
       if (setup.inPlay.includes(id)) src.push({ key: id, drunk: false });
       else if (setup.decoy === id) src.push({ key: id, drunk: true });
     }
@@ -451,6 +543,9 @@ var BOTC = (function () {
       const good = setup.inPlay.filter(id => GOOD(BY_ID[id].team));
       return { key, drunk, redHerring: pick(good, rng) };
     }
+    if (key === "grandmother") return { key, drunk, grandchild: pick(grandchildPool(setup), rng) };
+    if (key === "godfather") return { key, drunk, outsiders: setup.outsiders.slice() };
+    if (key === "lunatic") return { key, drunk, minions: setup.counts.minion, bluffs: setup.real >= 7 ? sample(lunaticBluffPool(setup), 3, rng) : [] };
     const type = INFO_KEYS[key];
     const targets = setup.inPlay.filter(id => BY_ID[id].team === type && id !== self);
     if (!targets.length) return { key, drunk, zero: type === "outsider", none: type !== "outsider" };
@@ -490,6 +585,22 @@ var BOTC = (function () {
     info[i] = Object.assign({}, info[i], { redHerring: id });
     return Object.assign({}, setup, { info });
   }
+  // ...and which Demon the Lunatic thinks they are, and the Grandmother's Grandchild
+  function setLunaticDemon(setup, id) {
+    if (!setup.lunaticAs || id === setup.lunaticAs || !setup.lunaticPool.includes(id)) return setup;
+    const s = Object.assign({}, setup, { lunaticAs: id });
+    s.bag = bagOf(s);
+    s.firstNight = nightOrder(s, "first");
+    s.otherNights = nightOrder(s, "other");
+    return s;
+  }
+  function setGrandchild(setup, id) {
+    const i = setup.info.findIndex(x => x.key === "grandmother");
+    if (i < 0 || !grandchildPool(setup).includes(id)) return setup;
+    const info = setup.info.slice();
+    info[i] = Object.assign({}, info[i], { grandchild: id });
+    return Object.assign({}, setup, { info });
+  }
 
   function reminderList(setup) {
     const out = [];
@@ -505,7 +616,7 @@ var BOTC = (function () {
     const acting = [...setup.inPlay.filter(id => id !== "drunk"), ...(setup.decoy ? [setup.decoy] : [])];
     const rows = acting.filter(id => BY_ID[id][key]).map(id => ({
       id, order: BY_ID[id][key], note: BY_ID[id][noteKey],
-      label: id === setup.decoy ? `${BY_ID[id].name} (the Drunk)` : BY_ID[id].name, drunk: id === setup.decoy
+      label: id === setup.decoy ? `${BY_ID[id].name} (the Drunk)` : id === "lunatic" ? `Lunatic (as ${BY_ID[setup.lunaticAs].name})` : BY_ID[id].name, drunk: id === setup.decoy
     }));
     if (which === "first" && setup.real >= 7) SYS_FIRST.forEach(s => rows.push({ id: s.id, order: s.order, note: s.note, label: s.label, sys: true }));
     rows.sort((x, y) => x.order - y.order);
@@ -515,32 +626,45 @@ var BOTC = (function () {
   /* ---------- VALIDATE ---------- */
   function checkSetup(s, cfg) {
     const e = [];
-    const p = id => prefOf(cfg, id);
+    const S = scriptOf(cfg), p = id => prefOf(cfg, id);
     const [TF, OS, MN] = DIST[s.real];
-    const tf = TF - (s.baron ? 2 : 0), os = OS + (s.baron ? 2 : 0);
+    const shift = s.modifier ? s.modifier.shift : 0;
+    const tf = TF - shift, os = OS + shift;
+    if (s.script !== S.id || s.inPlay.some(id => !S.roles.includes(id))) e.push("script");
     if (s.inPlay.length !== s.real) e.push("token count");
     if (s.real !== Math.min(cfg.players, 15) || s.travellers !== cfg.players - s.real) e.push("travellers");
     if (new Set(s.inPlay).size !== s.inPlay.length) e.push("duplicates");
     const count = t => s.inPlay.filter(id => BY_ID[id].team === t).length;
-    if (count("demon") !== 1 || !s.inPlay.includes("imp")) e.push("demon");
+    if (count("demon") !== 1 || !s.inPlay.includes(s.demon) || BY_ID[s.demon].team !== "demon") e.push("demon");
     if (count("townsfolk") !== tf || count("outsider") !== os || count("minion") !== MN) e.push("team counts");
-    if (s.baron !== s.inPlay.includes("baron")) e.push("baron flag");
-    for (const r of ROLES) {
-      if (p(r.id) === "include" && !s.inPlay.includes(r.id)) e.push("missing include " + r.id);
-      if (p(r.id) === "exclude" && s.inPlay.includes(r.id)) e.push("excluded in play " + r.id);
+    if (s.modifier ? s.modifier.id !== S.mod || !s.inPlay.includes(S.mod) || !BY_ID[S.mod].modifier.includes(shift) : S.mod && s.inPlay.includes(S.mod)) e.push("modifier");
+    for (const id of S.roles) {
+      if (p(id) === "include" && !s.inPlay.includes(id)) e.push("missing include " + id);
+      if (p(id) === "exclude" && s.inPlay.includes(id)) e.push("excluded in play " + id);
     }
     if (s.inPlay.includes("drunk")) {
       if (!s.decoy || BY_ID[s.decoy].team !== "townsfolk" || s.inPlay.includes(s.decoy) || p(s.decoy) === "exclude" || !s.decoyPool.includes(s.decoy)) e.push("decoy");
     } else if (s.decoy) e.push("decoy without drunk");
+    if (s.inPlay.includes("lunatic")) {
+      if (!s.lunaticAs || BY_ID[s.lunaticAs].team !== "demon" || p(s.lunaticAs) === "exclude" || !s.lunaticPool.includes(s.lunaticAs)) e.push("lunatic demon");
+      if (lunaticSwapped(s) ? s.bag.includes("lunatic") || !s.bag.includes(s.lunaticAs) : !s.bag.includes("lunatic")) e.push("lunatic bag");
+    } else if (s.lunaticAs) e.push("lunatic demon without lunatic");
     if (s.bag.length !== s.real || s.bag.includes("drunk") || (s.decoy && !s.bag.includes(s.decoy)) || new Set(s.bag).size !== s.bag.length) e.push("bag");
     if (s.real >= 7) {
       if (s.bluffs.length !== 3 || new Set(s.bluffs).size !== 3) e.push("bluff count");
-      for (const b of s.bluffs) if (!GOOD(BY_ID[b].team) || s.inPlay.includes(b) || b === s.decoy) e.push("bad bluff " + b);
+      for (const b of s.bluffs) if (!S.roles.includes(b) || !GOOD(BY_ID[b].team) || s.inPlay.includes(b) || b === s.decoy) e.push("bad bluff " + b);
     } else if (s.bluffs.length) e.push("bluffs at <7");
     for (const i of s.info) {
       const self = i.drunk ? "drunk" : i.key;
       if (i.key === "fortuneteller") {
         if (!s.inPlay.includes(i.redHerring) || !GOOD(BY_ID[i.redHerring].team)) e.push("red herring");
+        continue;
+      }
+      if (i.key === "grandmother") { if (!grandchildPool(s).includes(i.grandchild)) e.push("grandchild"); continue; }
+      if (i.key === "godfather") { if (i.outsiders.join() !== s.outsiders.join()) e.push("godfather info"); continue; }
+      if (i.key === "lunatic") {
+        const pool = lunaticBluffPool(s);
+        if (i.minions !== MN || i.bluffs.length !== (s.real >= 7 ? 3 : 0) || new Set(i.bluffs).size !== i.bluffs.length || i.bluffs.some(b => !pool.includes(b))) e.push("lunatic info");
         continue;
       }
       const type = INFO_KEYS[i.key];
@@ -555,10 +679,20 @@ var BOTC = (function () {
 
   /* ---------- FORMAT ---------- */
   const nm = id => BY_ID[id].name;
+  const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   function charLabel(s, id) { return id === "drunk" && s.decoy ? `Drunk (as ${nm(s.decoy)})` : nm(id); }
+  function lunaticLine(s) {
+    const as = nm(s.lunaticAs);
+    return lunaticSwapped(s)
+      ? { who: "Lunatic", text: `Thinks they are the ${as}. The ${as} token goes in the bag for them; swap it for the Lunatic token in the Grimoire.`, note: `The real Demon is the ${nm(s.demon)}.` }
+      : { who: "Lunatic", text: `Thinks they are the ${as}. Both the Lunatic and ${as} tokens go in the bag: after the draw, swap them in the Grimoire.`, note: "The player who drew the Demon is the Lunatic; whoever drew the Lunatic is the real Demon." };
+  }
   function infoLine(s, i) {
     const who = i.drunk ? `${nm(i.key)} (the Drunk)` : nm(i.key);
     if (i.key === "fortuneteller") return { who, text: `Red Herring: the ${charLabel(s, i.redHerring)} player`, note: i.drunk ? "The Drunk has no ability; answer however you like." : "Mark them RED HERRING. They register as the Demon to the Fortune Teller all game." };
+    if (i.key === "grandmother") return { who, text: `Grandchild: the ${charLabel(s, i.grandchild)} player. Show them the ${nm(i.grandchild)} token.`, note: "Mark them GRANDCHILD. If the Demon kills them, the Grandmother dies too." };
+    if (i.key === "godfather") return { who, fixed: true, text: i.outsiders.length ? `Show the ${andList(i.outsiders.map(nm))} token${i.outsiders.length > 1 ? "s" : ""}.` : "No Outsiders in play: show none.", note: "" };
+    if (i.key === "lunatic") return { who, text: i.bluffs.length ? `Point to ${i.minions > 1 ? `any ${i.minions} players as their Minions` : "any player as their Minion"}. Bluffs: ${i.bluffs.map(nm).join(", ")}.` : "No Minion info or bluffs at 5–6 players.", note: `Then wake the ${nm(s.demon)}: show THIS PLAYER IS and the Lunatic token, and point to the Lunatic.` };
     if (i.zero) return { who, text: "Show 0: no Outsiders in play", note: i.drunk ? "The Drunk can be shown false info." : "" };
     if (i.none) return { who, text: `No other ${TEAM_LABEL[INFO_KEYS[i.key]][0]} is in play`, note: "Only a Spy or Recluse registering could make this info true. Improvise or show false info." };
     const show = i.target === "drunk" ? "Drunk" : nm(i.target);
@@ -569,24 +703,26 @@ var BOTC = (function () {
     const acts = id => s.inPlay.includes(id) || s.decoy === id;
     if (acts("chef")) out.push({ who: s.decoy === "chef" ? "Chef (the Drunk)" : "Chef", text: "Count adjacent evil pairs at the table.", note: "Depends on seating." });
     if (acts("empath")) out.push({ who: s.decoy === "empath" ? "Empath (the Drunk)" : "Empath", text: "Count evil alive neighbours each night.", note: "Depends on seating." });
+    if (acts("tealady")) out.push({ who: "Tea Lady", text: "Protects their alive neighbours while both are good.", note: "Depends on seating." });
     return out;
   }
   function toText(s) {
     const L = [];
-    L.push(`Trouble Brewing · ${s.players} players${s.travellers ? ` (15 + ${s.travellers} Travellers)` : ""}`);
-    L.push(`${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${plural(s.counts.minion, "minion")} · 1 Demon${s.baron ? " (Baron: +2 Outsiders)" : ""}`);
+    L.push(`${SCRIPTS[s.script].name} · ${s.players} players${s.travellers ? ` (15 + ${s.travellers} Travellers)` : ""}`);
+    L.push(`${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` (${nm(s.modifier.id)}: ${shiftLabel(s.modifier.shift)})` : ""}`);
     L.push("");
     L.push("IN PLAY");
     L.push("Townsfolk: " + s.townsfolk.map(nm).join(", "));
     L.push("Outsiders: " + (s.outsiders.length ? s.outsiders.map(id => charLabel(s, id)).join(", ") : "none"));
     L.push("Minions: " + s.minions.map(nm).join(", "));
-    L.push("Demon: Imp");
+    L.push("Demon: " + nm(s.demon));
     L.push("");
     L.push("PUT IN THE BAG: " + s.bag.map(nm).join(", "));
     L.push("DEMON BLUFFS: " + (s.bluffs.length ? s.bluffs.map(nm).join(", ") : "none (5–6 players)"));
     if (s.travellers) L.push(`TRAVELLERS: ${s.travellers} (players choose; you set alignment)`);
     const prep = [];
     if (s.decoy) prep.push(`Drunk: place IS THE DRUNK on the ${nm(s.decoy)} player`);
+    if (s.lunaticAs) { const l = lunaticLine(s); prep.push(`${l.who}: ${l.text}`); }
     for (const i of s.info) { const l = infoLine(s, i); prep.push(`${l.who}: ${l.text}`); }
     for (const n of seatNotes(s)) prep.push(`${n.who}: ${n.text} (${n.note.toLowerCase().replace(".", "")})`);
     if (prep.length) { L.push(""); L.push("FIRST-NIGHT PREP"); prep.forEach(x => L.push("- " + x)); }
@@ -596,7 +732,7 @@ var BOTC = (function () {
     return L.join("\n");
   }
 
-  return { ROLES, BY_ID, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, setDecoy, setRedHerring, checkSetup, toText, infoLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural };
+  return { ROLES, BY_ID, SCRIPTS, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, setDecoy, setRedHerring, setLunaticDemon, setGrandchild, checkSetup, toText, infoLine, lunaticLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural, rolesOf, scriptOf, shiftLabel, modTag };
 })();
 /*CORE-END*/
 </script>
@@ -605,41 +741,67 @@ var BOTC = (function () {
 (function () {
   "use strict";
   const B = BOTC;
-  const STORE = "botc-tb-generator-v1";
+  const STORE = "botc-generator-v2", OLD_STORE = "botc-tb-generator-v1";
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  let state = { players: 8, pref: {} };
-  try { const saved = JSON.parse(localStorage.getItem(STORE) || "null"); if (saved && saved.players) state = { players: saved.players, pref: saved.pref || {} }; } catch (e) {}
+  // choices are kept per script; the player count is shared
+  let state = { script: "tb", players: 8, prefs: { tb: {}, bmr: {} } };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE) || "null");
+    const old = JSON.parse(localStorage.getItem(OLD_STORE) || "null");
+    if (saved && saved.players) state = { script: B.SCRIPTS[saved.script] ? saved.script : "tb", players: saved.players, prefs: Object.assign({ tb: {}, bmr: {} }, saved.prefs) };
+    else if (old && old.players) state = { script: "tb", players: old.players, prefs: { tb: old.pref || {}, bmr: {} } };
+  } catch (e) {}
   let result = null, staleKey = null;
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
-  const cfgKey = () => JSON.stringify([state.players, Object.entries(state.pref).filter(([, v]) => v !== "auto").sort()]);
+  const pref = () => state.prefs[state.script];
+  const cfg = () => ({ script: state.script, players: state.players, pref: pref() });
+  const S = () => B.SCRIPTS[state.script];
+  const cfgKey = () => JSON.stringify([state.script, state.players, Object.entries(pref()).filter(([, v]) => v !== "auto").sort()]);
+  const singleDemon = () => S().demons.length === 1;
+
+  /* ----- script switcher ----- */
+  const switchEl = $("script-switch");
+  switchEl.innerHTML = Object.values(B.SCRIPTS).map(s => `<button type="button" data-script="${s.id}" aria-pressed="false">${esc(s.name)}</button>`).join("");
+  switchEl.addEventListener("click", e => {
+    const b = e.target.closest("button[data-script]");
+    if (!b || b.dataset.script === state.script) return;
+    state.script = b.dataset.script; save();
+    renderPicker(); result = null; refresh();
+    if (B.analyze(cfg()).ok) run(); else renderResult(false);
+  });
 
   /* ----- picker ----- */
   const teamsEl = $("teams");
-  teamsEl.innerHTML = B.TEAMS.map(t => {
-    const evil = !B.GOOD(t);
-    return `<div class="team"><div class="team-head"><h3 class="${evil ? "t-evil" : "t-good"}">${B.TEAM_LABEL[t][1]}</h3><span class="budget" id="budget-${t}"></span></div>
-      <div class="tiles">${B.ROLES.filter(r => r.team === t).map(r => `
-        <div class="tile ${evil ? "evil" : "good"}" id="tile-${r.id}" data-state="auto">
-          <div class="row"><span class="nm">${esc(r.name)}</span>
-            <div class="seg3" role="group" aria-label="${esc(r.name)}">
-              <button type="button" data-id="${r.id}" data-v="include" aria-pressed="false">In</button><button type="button" data-id="${r.id}" data-v="auto" aria-pressed="true">Auto</button><button type="button" data-id="${r.id}" data-v="exclude" aria-pressed="false">Out</button>
-            </div></div>
-          <p class="ab">${esc(r.ability)}</p>
-          <span class="flag" id="flag-${r.id}" hidden></span>
-        </div>`).join("")}</div></div>`;
-  }).join("");
+  function renderPicker() {
+    switchEl.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.script === state.script)));
+    $("eyebrow").textContent = `Storyteller tool · ${S().name}`;
+    const roles = B.rolesOf(state.script);
+    teamsEl.innerHTML = B.TEAMS.map(t => {
+      const evil = !B.GOOD(t), list = roles.filter(r => r.team === t);
+      return `<div class="team"><div class="team-head"><h3 class="${evil ? "t-evil" : "t-good"}">${B.plural(list.length, t)}</h3><span class="budget" id="budget-${t}"></span></div>
+        <div class="tiles">${list.map(r => `
+          <div class="tile ${evil ? "evil" : "good"}" id="tile-${r.id}" data-state="auto">
+            <div class="row"><span class="nm">${esc(r.name)}</span>
+              <div class="seg3" role="group" aria-label="${esc(r.name)}">
+                <button type="button" data-id="${r.id}" data-v="include" aria-pressed="false">In</button><button type="button" data-id="${r.id}" data-v="auto" aria-pressed="true">Auto</button><button type="button" data-id="${r.id}" data-v="exclude" aria-pressed="false">Out</button>
+              </div></div>
+            <p class="ab">${esc(r.ability)}</p>
+            <span class="flag" id="flag-${r.id}" hidden></span>
+          </div>`).join("")}</div></div>`;
+    }).join("");
+  }
   teamsEl.addEventListener("click", e => {
     const b = e.target.closest("button[data-id]");
     if (!b || b.disabled) return;
     const { id, v } = b.dataset;
-    if (v === "auto") delete state.pref[id]; else state.pref[id] = v;
+    if (v === "auto") delete pref()[id]; else pref()[id] = v;
     save(); refresh();
   });
 
   /* ----- open / close the character list ----- */
-  const OPEN_KEY = STORE + "-picker-open";
+  const OPEN_KEY = OLD_STORE + "-picker-open";
   let pickerOpen = true;
   try { const v = localStorage.getItem(OPEN_KEY); if (v !== null) pickerOpen = v === "1"; } catch (e) {}
   function applyPicker() {
@@ -659,58 +821,68 @@ var BOTC = (function () {
   $("players").addEventListener("input", e => setPlayers(+e.target.value));
   $("dec").addEventListener("click", () => setPlayers(state.players - 1));
   $("inc").addEventListener("click", () => setPlayers(state.players + 1));
-  $("reset").addEventListener("click", () => { state.pref = {}; save(); refresh(); });
+  $("reset").addEventListener("click", () => { state.prefs[state.script] = {}; save(); refresh(); });
   $("generate").addEventListener("click", () => run());
 
   function refresh() {
-    const a = B.analyze(state);
-    const n = state.players;
+    const a = B.analyze(cfg());
+    const n = state.players, mod = S().mod, modName = mod && B.BY_ID[mod].name;
     $("pcount").textContent = n;
     $("players").value = n;
     $("dec").disabled = n <= 5; $("inc").disabled = n >= 20;
     $("count-hint").textContent = n > 15 ? `15 players + ${n - 15} Traveller${n - 15 > 1 ? "s" : ""}` : n <= 6 ? "Teensyville: no Demon bluffs" : "5–15, plus Travellers up to 20";
 
-    // distribution bar
+    // distribution bar: the Outsider-changing Minion shifts it when it's in (or forced) and its direction is settled
     const real = Math.min(n, 15), [TF, OS, MN] = B.DIST[real];
-    const baronIn = state.pref.baron === "include" || (a.ok && a.forcedBaron);
-    const tf = TF - (baronIn ? 2 : 0), os = OS + (baronIn ? 2 : 0), tr = n - real;
+    const mp = mod ? B.prefOf(cfg(), mod) : "exclude";
+    const modIn = !!mod && (mp === "include" || (a.ok && a.forcedMod));
+    const fit = a.ok && a.feasible ? a.feasible.find(f => f.mod) : null;
+    const shifts = modIn ? (fit ? fit.shifts : B.BY_ID[mod].modifier) : [];
+    const shift = shifts.length === 1 ? shifts[0] : 0;
+    const tf = TF - shift, os = OS + shift, tr = n - real;
     const segs = [["b-tf", tf, "Townsfolk"], ["b-os", os, "Outsiders"], ["b-mn", MN, "Minions"], ["b-dm", 1, "Demon"], ["b-tr", tr, "Travellers"]].filter(s => s[1] > 0);
     $("bar").innerHTML = segs.map(([c, v]) => `<div class="${c}" style="flex-grow:${v}">${v}</div>`).join("");
     $("bar").setAttribute("aria-label", segs.map(s => `${s[1]} ${s[2]}`).join(", "));
-    $("legend").innerHTML = segs.map(s => `<span>${s[2]} <b>${s[1]}</b></span>`).join("") + (baronIn ? `<span>Baron: +2 Outsiders</span>` : (!state.pref.baron || state.pref.baron === "auto") ? `<span>A random Baron shifts 2 Townsfolk to Outsiders</span>` : "");
+    let note = "";
+    if (modIn) note = shifts.length === 1 ? `${modName}: ${B.shiftLabel(shift)}` : `${modName}: ${B.modTag(mod)}, chosen at random`;
+    else if (mod && mp === "auto") note = mod === "baron" ? "A random Baron shifts 2 Townsfolk to Outsiders" : `A random ${modName} adds or removes 1 Outsider`;
+    $("legend").innerHTML = segs.map(s => `<span>${s[2]} <b>${s[1]}</b></span>`).join("") + (note ? `<span>${esc(note)}</span>` : "");
 
     // tiles
-    for (const r of B.ROLES) {
-      const v = B.prefOf(state, r.id), tile = $("tile-" + r.id);
+    for (const r of B.rolesOf(state.script)) {
+      const v = B.prefOf(cfg(), r.id), tile = $("tile-" + r.id);
+      const locked = r.team === "demon" && singleDemon();
       tile.dataset.state = v;
-      tile.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.v === v)); if (r.id === "imp") b.disabled = b.dataset.v !== "include"; });
+      tile.querySelectorAll("button").forEach(b => { b.setAttribute("aria-pressed", String(b.dataset.v === v)); b.disabled = locked && b.dataset.v !== "include"; });
       const flag = $("flag-" + r.id);
       let f = "";
-      if (r.id === "imp") f = "Always in play: the only Demon";
-      else if (r.id === "baron" && a.ok && a.forcedBaron) f = "Added automatically so your choices fit";
+      if (locked) f = "Always in play: the only Demon";
+      else if (r.id === mod && a.ok && a.forcedMod) f = "Added automatically so your choices fit";
       else if (r.id === "drunk" && v === "include") f = "A spare Townsfolk token goes in the bag as its decoy";
+      else if (r.id === "lunatic" && v === "include") f = "Thinks they're the Demon; the real Demon learns who they are";
       flag.textContent = f; flag.hidden = !f;
     }
 
     // budgets
-    const incCount = t => B.ROLES.filter(r => r.team === t && B.prefOf(state, r.id) === "include").length;
+    const incCount = t => B.rolesOf(state.script).filter(r => r.team === t && B.prefOf(cfg(), r.id) === "include").length;
     const slotsFor = { townsfolk: tf, outsider: os, minion: MN, demon: 1 };
     for (const t of B.TEAMS) {
       const el = $("budget-" + t), k = incCount(t), s = slotsFor[t];
-      el.textContent = `${k} in · ${s} slot${s === 1 ? "" : "s"}${t !== "demon" && baronIn && t !== "minion" ? " with Baron" : ""}`;
+      el.textContent = `${k} in · ${s} slot${s === 1 ? "" : "s"}${shift && (t === "townsfolk" || t === "outsider") ? ` with ${modName}` : ""}`;
       el.classList.toggle("over", k > s);
     }
 
     // errors
     $("errors").innerHTML = a.ok ? "" : a.errors.map(m => `<div class="err">${esc(m)}</div>`).join("");
     $("generate").disabled = !a.ok;
-    const k = Object.values(state.pref).filter(v => v !== "auto").length;
+    const k = Object.values(pref()).filter(v => v !== "auto").length;
     $("choice-count").textContent = k ? `${k} choice${k > 1 ? "s" : ""} set` : "";
     $("reset").hidden = !k;
 
     // collapsed summary of In / Out choices
-    const ins = B.ROLES.filter(r => r.id !== "imp" && B.prefOf(state, r.id) === "include");
-    const outs = B.ROLES.filter(r => B.prefOf(state, r.id) === "exclude");
+    const roles = B.rolesOf(state.script);
+    const ins = roles.filter(r => !(r.team === "demon" && singleDemon()) && B.prefOf(cfg(), r.id) === "include");
+    const outs = roles.filter(r => B.prefOf(cfg(), r.id) === "exclude");
     $("picker-state").textContent = pickerOpen ? "Hide" : (ins.length || outs.length ? `${ins.length} in · ${outs.length} out` : "All on Auto");
     const sum = $("choice-summary");
     sum.innerHTML = ins.map(r => `<span class="chip ${B.GOOD(r.team) ? "in-good" : "in-evil"}">${esc(r.name)}</span>`).join("")
@@ -721,7 +893,7 @@ var BOTC = (function () {
   }
 
   function run() {
-    const r = B.generate(state);
+    const r = B.generate(cfg());
     if (!r.ok) { $("errors").innerHTML = r.errors.map(m => `<div class="err">${esc(m)}</div>`).join(""); return; }
     result = r.setup; staleKey = cfgKey();
     renderResult(false);
@@ -732,41 +904,51 @@ var BOTC = (function () {
   function renderResult(stale) {
     const s = result, el = $("result");
     if (!s) { el.innerHTML = `<p class="muted">Press Generate to build a setup.</p>`; return; }
+    const SS = B.SCRIPTS[s.script];
     const pinned = new Set(s.included);
-    const group = (t, list) => `<div class="grp"><span class="grp-name ${B.GOOD(t) ? "t-good" : "t-evil"}">${B.TEAM_LABEL[t][1]} · ${list.length}</span>${
+    const nm = id => B.BY_ID[id].name;
+    const group = (t, list) => `<div class="grp"><span class="grp-name ${B.GOOD(t) ? "t-good" : "t-evil"}">${B.plural(list.length, t)} · ${list.length}</span>${
       list.length ? list.map(id => {
         const r = B.BY_ID[id];
-        const tags = (pinned.has(id) && id !== "imp" ? `<span class="pin">pinned</span>` : "") + (id === "baron" && s.autoBaron ? `<span class="pin">added so your choices fit</span>` : "");
-        const extra = id === "drunk" && s.decoy ? `<span class="ab">Thinks they are the <b>${esc(B.BY_ID[s.decoy].name)}</b>. Put the ${esc(B.BY_ID[s.decoy].name)} token in the bag.</span>` : "";
+        const tags = (pinned.has(id) && !(t === "demon" && SS.demons.length === 1) ? `<span class="pin">pinned</span>` : "") + (s.modifier && id === s.modifier.id && s.autoModifier ? `<span class="pin">added so your choices fit</span>` : "");
+        let extra = "";
+        if (id === "drunk" && s.decoy) extra = `<span class="ab">Thinks they are the <b>${esc(nm(s.decoy))}</b>. Put the ${esc(nm(s.decoy))} token in the bag.</span>`;
+        if (id === "lunatic" && s.lunaticAs) extra = `<span class="ab">Thinks they are the <b>${esc(nm(s.lunaticAs))}</b>.</span>`;
+        if (s.modifier && id === s.modifier.id) extra = `<span class="ab">This game: <b>${esc(B.shiftLabel(s.modifier.shift))}</b>.</span>`;
         return `<div class="ch ${B.GOOD(t) ? "" : "evil"}"><span class="nm"><b>${esc(r.name)}</b>${tags}</span><span class="ab">${esc(r.ability)}</span>${extra}</div>`;
       }).join("") : `<span class="muted">None this game</span>`}</div>`;
 
     const select = (set, label, value, ids, text) => `<select data-set="${set}" aria-label="${esc(label)}">${ids.map(id => `<option value="${id}"${id === value ? " selected" : ""}>${esc(text(id))}</option>`).join("")}</select>`;
     const prep = [];
-    if (s.decoy) prep.push({ who: "Drunk", text: `Place IS THE DRUNK on the ${B.BY_ID[s.decoy].name} player.`, note: "Wake them as that Townsfolk. You may give them false info.",
-      ctl: s.decoyPool.length > 1 ? select("decoy", "Character the Drunk thinks they are", s.decoy, s.decoyPool, id => "Thinks: " + B.BY_ID[id].name) : "" });
+    if (s.decoy) prep.push({ who: "Drunk", text: `Place IS THE DRUNK on the ${nm(s.decoy)} player.`, note: "Wake them as that Townsfolk. You may give them false info.",
+      ctl: s.decoyPool.length > 1 ? select("decoy", "Character the Drunk thinks they are", s.decoy, s.decoyPool, id => "Thinks: " + nm(id)) : "" });
+    if (s.lunaticAs) prep.push(Object.assign({}, B.lunaticLine(s), {
+      ctl: s.lunaticPool.length > 1 ? select("lunatic", "Demon the Lunatic thinks they are", s.lunaticAs, s.lunaticPool, id => "Thinks: " + nm(id)) : "" }));
     s.info.forEach(i => {
       const l = B.infoLine(s, i);
-      const ctl = i.key === "fortuneteller" ? select("redherring", "Red Herring", i.redHerring, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team)), id => B.charLabel(s, id)) : "";
-      prep.push(Object.assign({ key: i.key, ctl }, l));
+      let ctl = "";
+      if (i.key === "fortuneteller") ctl = select("redherring", "Red Herring", i.redHerring, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team)), id => B.charLabel(s, id));
+      if (i.key === "grandmother") ctl = select("grandchild", "Grandchild", i.grandchild, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team) && id !== "grandmother"), id => B.charLabel(s, id));
+      prep.push(Object.assign({ key: l.fixed || (i.key === "lunatic" && !i.bluffs.length) ? null : i.key, ctl }, l));
     });
     B.seatNotes(s).forEach(n => prep.push(n));
 
     el.innerHTML = `
       <div class="res-head">
-        <span class="eyebrow">Setup</span>
+        <span class="eyebrow">${esc(SS.name)} setup</span>
         <h2>${s.players} players${s.travellers ? ` · 15 + ${s.travellers} Travellers` : ""}</h2>
-        <p class="summary">${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${B.plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${B.plural(s.counts.minion, "minion")} · 1 Demon${s.baron ? " · Baron +2 Outsiders" : ""}</p>
+        <p class="summary">${s.counts.townsfolk} Townsfolk · ${s.counts.outsider} ${B.plural(s.counts.outsider, "outsider")} · ${s.counts.minion} ${B.plural(s.counts.minion, "minion")} · 1 Demon${s.modifier ? ` · ${esc(nm(s.modifier.id))} ${esc(B.shiftLabel(s.modifier.shift))}` : ""}</p>
         ${stale ? `<p class="stale">Your choices changed since this was generated. Press Generate to update.</p>` : ""}
         <div class="actions"><button type="button" class="btn small" id="reroll">Re-roll</button><button type="button" class="btn small" id="copy">Copy as text</button></div>
         <div id="copy-fallback"></div>
       </div>
       <div class="block"><h3>In play</h3><div class="inplay">
-        ${group("townsfolk", s.townsfolk)}${group("outsider", s.outsiders)}${group("minion", s.minions)}${group("demon", ["imp"])}
+        ${group("townsfolk", s.townsfolk)}${group("outsider", s.outsiders)}${group("minion", s.minions)}${group("demon", [s.demon])}
       </div></div>
-      <div class="block"><h3>Put in the bag · ${s.bag.length} tokens</h3><div class="chips">${s.bag.map(id => chip(id, id === s.decoy ? "decoy" : "")).join("")}</div>
-        ${s.decoy ? `<p class="muted">Dashed: the Drunk's decoy. The Drunk token stays out of the bag.</p>` : ""}</div>
-      ${s.travellers ? `<div class="block"><h3>Travellers · ${s.travellers}</h3><p class="muted">Recommended: Scapegoat, Gunslinger, Beggar, Bureaucrat, Thief. They choose; you set alignment.</p></div>` : ""}
+      <div class="block"><h3>Put in the bag · ${s.bag.length} tokens</h3><div class="chips">${s.bag.map(id => chip(id, id === s.decoy || (s.lunaticAs && id === s.lunaticAs && id !== s.demon) ? "decoy" : "")).join("")}</div>
+        ${s.decoy ? `<p class="muted">Dashed: the Drunk's decoy. The Drunk token stays out of the bag.</p>` : ""}
+        ${s.lunaticAs && s.lunaticAs !== s.demon ? `<p class="muted">Dashed: the Lunatic's fake Demon. The Lunatic token stays out of the bag.</p>` : ""}</div>
+      ${s.travellers ? `<div class="block"><h3>Travellers · ${s.travellers}</h3><p class="muted">Recommended: ${esc(SS.travellers.join(", "))}. They choose; you set alignment.</p></div>` : ""}
       <div class="block"><h3>Demon bluffs</h3>${s.bluffs.length ? `<div class="chips">${s.bluffs.map(id => chip(id)).join("")}</div>` : `<p class="muted">None: with 5–6 players the Demon gets no bluffs and Minion and Demon don't learn each other.</p>`}</div>
       ${prep.length ? `<div class="block"><h3>First-night prep</h3><ul class="prep">${prep.map(x => `<li><span><span class="who">${esc(x.who)}</span> ${esc(x.text)}${x.note ? `<span class="note">${esc(x.note)}</span>` : ""}</span>${x.ctl || x.key ? `<span class="ctl">${x.ctl || ""}${x.key ? `<button type="button" class="btn small" data-repick="${x.key}" aria-label="Re-pick ${esc(x.who)}">Re-pick</button>` : ""}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
       ${s.reminders.length ? `<div class="block"><h3>Reminder tokens to pull</h3><div class="chips">${s.reminders.map(r => `<span class="chip">${esc(r.name)}${r.decoy ? " (Drunk)" : ""}: ${esc(r.tokens.join(", "))}</span>`).join("")}</div></div>` : ""}
@@ -775,10 +957,11 @@ var BOTC = (function () {
         <div><p class="muted" style="margin-bottom:6px"><b>Other nights</b></p><ol><li class="sys">Dusk</li>${s.otherNights.map(r => `<li>${esc(r.label)}<span class="note">${esc(r.note)}</span></li>`).join("")}<li class="sys">Dawn</li></ol></div>
       </div></div>`;
 
-    $("reroll").addEventListener("click", () => { if (B.analyze(state).ok) run(); });
+    $("reroll").addEventListener("click", () => { if (B.analyze(cfg()).ok) run(); });
     $("copy").addEventListener("click", copyText);
+    const SET = { decoy: B.setDecoy, redherring: B.setRedHerring, lunatic: B.setLunaticDemon, grandchild: B.setGrandchild };
     el.querySelectorAll("select[data-set]").forEach(sel => sel.addEventListener("change", () => {
-      result = sel.dataset.set === "decoy" ? B.setDecoy(result, sel.value) : B.setRedHerring(result, sel.value);
+      result = SET[sel.dataset.set](result, sel.value);
       renderResult(cfgKey() !== staleKey);
     }));
     el.querySelectorAll("[data-repick]").forEach(b => b.addEventListener("click", () => { result = B.repick(result, b.dataset.repick); renderResult(cfgKey() !== staleKey); }));
@@ -801,8 +984,9 @@ var BOTC = (function () {
     } catch (e) { fallback(); }
   }
 
+  renderPicker();
   refresh();
-  if (B.analyze(state).ok) run(); else renderResult(false);
+  if (B.analyze(cfg()).ok) run(); else renderResult(false);
 })();
 </script>
 </body>
