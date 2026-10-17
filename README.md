@@ -46,6 +46,8 @@ index.html                    the app (data, generator, validator and UI)
 tests/test-generator.js       headless generator tests
 docs/research.md              Trouble Brewing rules research
 docs/implementation-plan.md   design and decisions
+docs/research-bmr.md          Bad Moon Rising rules research
+docs/implementation-plan-bmr.md  plan for adding Bad Moon Rising
 .github/workflows/pages.yml   test + deploy to GitHub Pages
 ```
 
