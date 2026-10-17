@@ -208,6 +208,119 @@ function expect(name, cond) { if (!cond) fail(name); else console.log("ok  ", na
   }
 }
 
+// 2d. Custom (every character) and Experimental
+// Oracle for Custom without pinned setup-changing characters: Demon × Minion sets × Outsider shifts, then counts.
+// Setup-changing experimental characters count as Out unless pinned; a Demon's shift applies after the Minions'.
+function oracleCustom(cfg) {
+  const script = cfg.experimental ? "customx" : "custom";
+  const real = Math.min(cfg.players, 15), [TF, OS, MN] = B.DIST[real];
+  const p = id => { const v = B.prefOf(cfg, id); return B.BY_ID[id].pinOnly && v !== "include" ? "exclude" : v; };
+  const lists = {};
+  for (const t of ["townsfolk", "outsider", "minion", "demon"]) { const all = ids(t, script); lists[t] = { all, inc: all.filter(id => p(id) === "include"), non: all.filter(id => p(id) !== "exclude") }; }
+  const team = t => lists[t].all, inc = t => lists[t].inc, non = t => lists[t].non;
+  if (inc("demon").length > 1) return false;
+  const okSet = (set, t) => inc(t).every(id => set.includes(id)) && set.every(id => p(id) !== "exclude");
+  const minionSets = combos(team("minion"), MN).filter(mn => okSet(mn, "minion"));
+  for (const dm of non("demon")) {
+    if (inc("demon").length && !inc("demon").includes(dm)) continue;
+    for (const mn of minionSets) {
+      const mods = mn.filter(id => B.BY_ID[id].modifier);
+      const shiftSets = mods.reduce((acc, id) => acc.flatMap(a => B.BY_ID[id].modifier.map(d => a + d)), [0]);
+      for (const ms of shiftSets) {
+        const others = OS + ms, D = B.BY_ID[dm];
+        const os = others + (D.modifier ? (D.clamp ? Math.max(D.modifier[0], -others) : D.modifier[0]) : 0), tf = TF + OS - os;
+        if (os < 0 || tf < 0) continue;
+        if (inc("townsfolk").length > tf || non("townsfolk").length < tf) continue;
+        const drunkOk = non("townsfolk").length >= tf + 1;
+        const usable = non("outsider").filter(id => id !== "drunk" || drunkOk);
+        if (inc("outsider").includes("drunk") && !drunkOk) continue;
+        if (inc("outsider").length > os || usable.length < os) continue;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+for (const exp of [false, true]) {
+  let gens = 0, feasibleCount = 0, oracled = 0;
+  for (let n = 5; n <= 20; n++) {
+    for (let i = 0; i < (exp ? 100 : 300); i++) {
+      const density = [0, 3, 6, 12][i % 4];
+      const pref = randomPref(density, exp ? "customx" : "custom");
+      // setup-changing characters: pinned now and then (Out/Auto both mean "not used")
+      if (exp) for (const id of B.PIN_ONLY) { delete pref[id]; if (rng(100) < 2) pref[id] = "include"; }
+      const cfg = { script: "custom", experimental: exp, players: n, pref };
+      const a = B.analyze(cfg);
+      if (!B.PIN_ONLY.some(id => pref[id] === "include") && (!exp || i % 3 === 0)) { oracled++; const o = oracleCustom(cfg); if (a.ok !== o) fail("custom analyze vs oracle", { cfg, a: a.ok, o, errors: a.errors }); }
+      if (!a.ok && !a.errors.length) fail("custom: no message", cfg);
+      if (a.ok) {
+        feasibleCount++;
+        for (let k = 0; k < 2; k++) {
+          const r = B.generate(cfg, rng); gens++;
+          if (!r.ok) { fail("custom generate failed", { cfg, errors: r.errors }); break; }
+          if (!exp || true) { const extra = B.checkSetup(r.setup, cfg); if (extra.length) fail("custom checkSetup", extra); }
+          if (!B.toText(r.setup).includes("PUT IN THE BAG")) fail("custom text");
+        }
+      }
+    }
+  }
+  console.log(`property run (custom${exp ? " + experimental" : ""}): ${gens} generations, ${feasibleCount} feasible configs, ${oracled} checked against the oracle`);
+}
+{
+  const cust = (players, pref, experimental = true) => g({ script: "custom", experimental, players, pref: pref || {} });
+  expect("Custom lists every base character (72); Experimental adds 66", B.SCRIPTS.custom.roles.length === 72 && B.SCRIPTS.customx.roles.length === 138 && new Set(B.SCRIPTS.customx.roles).size === 138);
+  { let none = true; for (let i = 0; i < 300; i++) { const s = cust(5 + (i % 11)).setup; none = none && ![...s.inPlay, s.demon].some(id => B.PIN_ONLY.includes(id)); } expect("Setup-changing experimental characters never appear unless pinned", none); }
+  { const s = cust(9, { atheist: "include" }, false).setup; expect("Experimental off: experimental pins are ignored", !s.inPlay.includes("atheist") && s.inPlay.every(id => B.SCRIPTS.custom.roles.includes(id))); }
+  { let all = true; for (let i = 0; i < 100; i++) { const s = cust(12, { baron: "include", godfather: "include", fanggu: "exclude", vigormortis: "exclude" }, false).setup; const sh = s.modifiers.reduce((t, m) => t + m.shift, 0); all = all && [1, 3].includes(sh) && s.outsiders.length === 2 + sh && s.townsfolk.length === 7 - sh; } expect("Baron + Godfather together: +1 or +3 Outsiders", all); }
+  { const s = cust(5, { baron: "include", vigormortis: "include" }, false).setup; expect("Baron then Vigormortis at 5: 0 + 2 − 1 = 1 Outsider, 2 Townsfolk", s.outsiders.length === 1 && s.townsfolk.length === 2); }
+  {
+    const [TF, OS, MN] = B.DIST[11];
+    const at = cust(11, { atheist: "include" }).setup;
+    expect("Atheist: no evil characters, no bluffs, no Minion/Demon info", at.minions.length === 0 && !at.demon && at.townsfolk.length === TF + MN + 1 && at.bluffs.length === 0 && !at.firstNight.some(r => r.sys) && at.bag.every(id => B.GOOD(B.BY_ID[id].team)));
+    const su = cust(6, { summoner: "include" }).setup;
+    expect("Summoner: no Demon, +1 Townsfolk, 3 bluffs even at 6 players", !su.demon && su.townsfolk.length === B.DIST[6][0] + 1 && su.bluffs.length === 3 && /SUMMONER'S BLUFFS/.test(B.toText(su)));
+    const lm = cust(11, { lilmonsta: "include" }).setup;
+    expect("Lil' Monsta: +1 Minion, no Demon player or token in the bag, no bluffs", lm.minions.length === MN + 1 && lm.demon === "lilmonsta" && !lm.bag.includes("lilmonsta") && lm.bluffs.length === 0 && lm.firstNight.some(r => r.id === "lilmonsta") && !lm.firstNight.some(r => r.sys));
+    const kz = cust(11, { kazali: "include" }).setup;
+    expect("Kazali: no Minions in the bag, Townsfolk instead", kz.minions.length === 0 && kz.townsfolk.length === TF + MN && kz.demon === "kazali" && B.prepNotes(kz).some(n => n.who === "Kazali"));
+    const lt = cust(11, { lordoftyphon: "include", baron: "exclude", godfather: "exclude" }).setup;
+    expect("Lord of Typhon: +1 Minion, −1 Townsfolk, seating note", lt.minions.length === MN + 1 && lt.townsfolk.length === TF - 1 && B.seatNotes(lt).some(n => n.who === "Lord of Typhon"));
+    const lg = cust(10, { legion: "include" }).setup;
+    expect("Legion: 7 Legion + 3 good at 10 players", lg.legion === 7 && lg.bag.filter(id => id === "legion").length === 7 && lg.townsfolk.length + lg.outsiders.length === 3 && lg.minions.length === 0);
+    let xs = new Set(); for (let i = 0; i < 100; i++) { const xa = cust(11, { xaan: "include" }).setup; xs.add(xa.xaanX); if (xa.outsiders.length !== xa.xaanX) xs.add("bad"); }
+    expect(`Xaan: X Outsiders, usually 1–4 (saw ${[...xs].sort().join(",")})`, [...xs].every(x => [1, 2, 3, 4].includes(x)) && xs.size > 1);
+  }
+  const err = (pref, re, players = 9) => { const a = B.analyze({ script: "custom", experimental: true, players, pref }); const ok = !a.ok && re.test(a.errors.join(" ")); if (ok) console.log("     →", a.errors[0]); return ok; };
+  expect("Two shapers → error", err({ atheist: "include", xaan: "include" }, /reshape the whole setup/));
+  expect("Atheist + Imp → error", err({ atheist: "include", imp: "include" }, /no evil characters\. Remove the Imp/));
+  expect("Summoner + Imp → error", err({ summoner: "include", imp: "include" }, /no Demon starts in play/));
+  expect("Kazali + Poisoner → error", err({ kazali: "include", poisoner: "include" }, /no Minion tokens go in the bag/));
+  expect("Marionette + Lil' Monsta → error", err({ marionette: "include", lilmonsta: "include" }, /needs a Demon player/));
+  expect("Choirboy with the King Out → error", err({ choirboy: "include", king: "exclude" }, /brings the King into play/));
+  { let all = true; for (let i = 0; i < 50; i++) { const s = cust(9, { choirboy: "include" }).setup; all = all && s.townsfolk.includes("king"); } expect("Choirboy brings in the King", all); }
+  { let sh = new Set(), all = true; for (let i = 0; i < 100; i++) { const s = cust(9, { huntsman: "include" }).setup; const m = s.modifiers.find(x => x.id === "huntsman"); sh.add(m.shift); all = all && s.outsiders.includes("damsel"); } expect("Huntsman brings in the Damsel (+0 or +1 Outsider)", all && sh.has(0) && sh.has(1)); }
+  { let b = new Set(), h = new Set(); for (let i = 0; i < 100; i++) { b.add(cust(9, { balloonist: "include" }).setup.modifiers.find(x => x.id === "balloonist").shift); h.add(cust(9, { hermit: "include" }).setup.modifiers.find(x => x.id === "hermit").shift); } expect("Balloonist +0/+1 and Hermit −0/−1", b.has(0) && b.has(1) && h.has(0) && h.has(-1)); }
+  {
+    const cfg = { script: "custom", experimental: true, players: 12, pref: { marionette: "include", drunk: "include" } };
+    let all = true;
+    for (let i = 0; i < 100; i++) { const s = g(cfg).setup; all = all && s.marionetteAs && s.decoy && s.marionetteAs !== s.decoy && s.bag.includes(s.marionetteAs) && !s.bag.includes("marionette") && s.firstNight.concat(s.otherNights).every(r => r.id !== s.marionetteAs || /Marionette/.test(r.label)); }
+    expect("Marionette: its own spare Townsfolk in the bag, never the Drunk's", all);
+    const s = g(cfg).setup, other = s.marionettePool.find(id => id !== s.marionetteAs && id !== s.decoy);
+    const t = B.setMarionette(s, other, rng);
+    expect("Set the Marionette's Townsfolk; the Drunk's is refused", t.marionetteAs === other && B.checkSetup(t, cfg).length === 0 && B.setMarionette(s, s.decoy, rng) === s);
+  }
+  { let all = true; for (let i = 0; i < 100; i++) { const s = cust(10, { bountyhunter: "include" }).setup; const b = s.info.find(x => x.key === "bountyhunter"); all = all && s.townsfolk.includes(b.evilTownsfolk) && b.evilTownsfolk !== "bountyhunter" && (s.minions.includes(b.knows) || s.demon === b.knows || b.knows === b.evilTownsfolk); } expect("Bounty Hunter: an evil Townsfolk, and knows an evil player", all); }
+  { const s = cust(10, { mathematician: "include", lunatic: "include" }, false).setup; expect("Jinxes listed for characters in play", s.jinxes.some(j => j.a === "mathematician" && j.b === "lunatic") && /JINXES/.test(B.toText(s))); }
+  { const s = g({ script: "tb", players: 10, pref: {} }).setup; expect("Base scripts never list jinxes", !s.jinxes && !/JINXES/.test(B.toText(s))); }
+  {
+    const df = {}; const N = 9000;
+    for (let i = 0; i < N; i++) { const s = cust(9, {}, false).setup; df[s.demon] = (df[s.demon] || 0) + 1; }
+    const dv = Object.values(df);
+    console.log("Custom Demon freq:", Object.entries(df).map(([k, v]) => `${k}:${(v / N * 100).toFixed(1)}%`).join(" "));
+    expect("Custom Demons equally likely (within 15%)", dv.length === 9 && (Math.max(...dv) - Math.min(...dv)) / Math.max(...dv) < 0.15);
+  }
+}
+
 // 3. Fairness: Townsfolk frequency at 10 players, all Auto
 {
   const freq = {}; const N = 50000;
