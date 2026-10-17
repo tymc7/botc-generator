@@ -1,6 +1,6 @@
 # Clocktower Setup Generator
 
-A Storyteller tool for *Blood on the Clocktower*. Pick a script (**Trouble Brewing**, **Bad Moon Rising** or **Sects & Violets**) and a player count, pin characters in or rule them out, and generate a legal setup.
+A Storyteller tool for *Blood on the Clocktower*. Pick a script (**Trouble Brewing**, **Bad Moon Rising**, **Sects & Violets** or **Custom**) and a player count, pin characters in or rule them out, and generate a legal setup.
 
 **Live site:** https://tymc7.github.io/botc-generator/
 
@@ -8,7 +8,8 @@ A Storyteller tool for *Blood on the Clocktower*. Pick a script (**Trouble Brewi
 
 - **Player count:** 5–15 players, plus up to 5 Travellers (16–20), following the official setup table.
 - **Choose characters:** mark each one **In** (always appears), **Auto** (may appear) or **Out** (never appears). If your choices can't fit, Generate is disabled and a message explains the fix.
-- **Scripts:** switch between Trouble Brewing, Bad Moon Rising and Sects & Violets at the top. Your choices are kept separately for each script.
+- **Scripts:** switch between Trouble Brewing, Bad Moon Rising, Sects & Violets and Custom at the top. Your choices are kept separately for each script.
+- **Custom:** every character from the three scripts (72), listed alphabetically with an edition tag. Tick **Experimental** to add the 66 experimental characters from the official site. Experimental characters that change setup (Atheist, Summoner, Lil' Monsta, Kazali, Legion, Lord of Typhon, Xaan, Marionette, Balloonist, Hermit, Huntsman, Choirboy, Bounty Hunter, Village Idiot) are only used when you pin them In; their setup rules are applied for you. Official jinxes between the characters in play are listed with the setup. See `docs/research-custom.md`.
 - **Setup rules:** the Baron (+2 Outsiders), the Drunk (a decoy Townsfolk goes in the bag), the Godfather (−1 or +1 Outsider, picked at random among the options that fit), the Lunatic (thinks they're the Demon), the Fang Gu (+1 Outsider) and the Vigormortis (−1 Outsider, or no change when there are none to remove) are handled automatically. The Baron, Godfather or an Outsider-changing Demon is added for you when it's the only way your choices fit. In Bad Moon Rising and Sects & Violets the Demon is one of four, and Demons can be pinned In or ruled Out too.
 - **Each setup lists:** characters in play, the exact tokens for the bag, Demon bluffs, first-night prep (Red Herring, Washerwoman/Librarian/Investigator info; the Grandchild, the Godfather's Outsiders, the Lunatic's fake Minions and bluffs; the Good Twin; reminders for the Vortox, Fang Gu and Pit-Hag), reminder tokens, and the night order (official night-sheet order).
 - **Storyteller overrides:** after generating, choose which Townsfolk the Drunk thinks they are (from the spare, non-excluded Townsfolk), which good player is the Fortune Teller's Red Herring, which Demon the Lunatic thinks they are (non-excluded Demons; the default is the real Demon), who the Grandmother's Grandchild is and who the Evil Twin's Good Twin is. The bag, bluffs, first-night info and night order update to match.
@@ -52,6 +53,7 @@ docs/research-bmr.md          Bad Moon Rising rules research
 docs/implementation-plan-bmr.md  plan for adding Bad Moon Rising
 docs/research-snv.md          Sects & Violets rules research
 docs/implementation-plan-snv.md  plan for adding Sects & Violets
+docs/research-custom.md       Custom script, experimental characters and their setup rules
 .github/workflows/pages.yml   test + deploy to GitHub Pages
 ```
 
