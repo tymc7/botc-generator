@@ -146,8 +146,12 @@ button{font:inherit;color:inherit}
 .prep{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .prep li{display:flex;gap:10px;justify-content:space-between;align-items:start;background:var(--bg);border-radius:5px;padding:8px 10px;font-size:.88rem}
 .prep li > span{min-width:0}
+.prep li:has(.ctl){flex-wrap:wrap}
+.prep li:has(.ctl) > span:first-child{flex:1 1 220px}
 .prep .who{font-weight:600}
 .prep .note{display:block;color:var(--muted);font-size:.78rem}
+.prep .ctl{display:flex;flex-wrap:wrap;gap:6px;flex:none;max-width:100%}
+.prep select{font:inherit;font-size:.8rem;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);max-width:100%}
 .nights{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .nights ol{margin:0;padding-left:1.5em;display:grid;gap:4px;font-size:.86rem}
 .nights li::marker{font-family:var(--mono);font-size:.78em;color:var(--muted)}
@@ -366,6 +370,8 @@ var BOTC = (function () {
   }
 
   /* ---------- GENERATE ---------- */
+  const order = (list) => list.slice().sort((x, y) => ROLES.indexOf(BY_ID[x]) - ROLES.indexOf(BY_ID[y]));
+  const bagOf = s => order([...s.townsfolk, ...(s.decoy ? [s.decoy] : []), ...s.outsiders.filter(id => id !== "drunk"), ...s.minions, "imp"]);
   function generate(cfg, rng) {
     rng = rng || cryptoRng();
     const a = analyze(cfg);
@@ -392,20 +398,20 @@ var BOTC = (function () {
     const tfPool = a.nonEx.townsfolk.filter(id => !a.inc.townsfolk.includes(id));
     const townsfolk = a.inc.townsfolk.concat(sample(tfPool, tf - a.inc.townsfolk.length, rng));
 
-    // Drunk decoy
-    const decoy = outsiders.includes("drunk") ? pick(a.nonEx.townsfolk.filter(id => !townsfolk.includes(id)), rng) : null;
+    // Drunk decoy (decoyPool: the Townsfolk the Storyteller may switch it to later)
+    const decoyPool = outsiders.includes("drunk") ? order(a.nonEx.townsfolk.filter(id => !townsfolk.includes(id))) : [];
+    const decoy = pick(decoyPool, rng);
 
-    const order = (list) => list.slice().sort((x, y) => ROLES.indexOf(BY_ID[x]) - ROLES.indexOf(BY_ID[y]));
     const setup = {
       players: a.players, real: a.real, travellers: a.travellers, baron,
       autoBaron: baron && p("baron") === "auto" && a.forcedBaron,
       counts: { townsfolk: tf, outsider: os, minion: a.base.mn, demon: 1 },
       townsfolk: order(townsfolk), outsiders: order(outsiders), minions: order(minions), demon: "imp",
-      decoy,
+      decoy, decoyPool,
       included: ROLES.filter(r => p(r.id) === "include").map(r => r.id)
     };
     setup.inPlay = [...setup.townsfolk, ...setup.outsiders, ...setup.minions, "imp"];
-    setup.bag = order([...setup.townsfolk, ...(decoy ? [decoy] : []), ...setup.outsiders.filter(id => id !== "drunk"), ...setup.minions, "imp"]);
+    setup.bag = bagOf(setup);
     setup.bluffs = pickBluffs(setup, rng);
     setup.info = pickInfo(setup, rng);
     setup.reminders = reminderList(setup);
@@ -462,6 +468,29 @@ var BOTC = (function () {
     return Object.assign({}, setup, { info });
   }
 
+  // Storyteller overrides after generating: who the Drunk thinks they are, and the Red Herring
+  function setDecoy(setup, id, rng) {
+    if (!setup.decoy || id === setup.decoy || !setup.decoyPool.includes(id)) return setup;
+    rng = rng || cryptoRng();
+    const s = Object.assign({}, setup, { decoy: id });
+    s.bag = bagOf(s);
+    // the new decoy can't stay a bluff; the old decoy is a spare Townsfolk that takes its place
+    s.bluffs = setup.bluffs.map(b => b === id ? setup.decoy : b);
+    // keep first-night picks that still apply; pick fresh for a newly acting info character
+    s.info = infoSources(s).map(src => setup.info.find(x => x.key === src.key && x.drunk === src.drunk) || pickOne(s, src.key, src.drunk, rng));
+    s.reminders = reminderList(s);
+    s.firstNight = nightOrder(s, "first");
+    s.otherNights = nightOrder(s, "other");
+    return s;
+  }
+  function setRedHerring(setup, id) {
+    const i = setup.info.findIndex(x => x.key === "fortuneteller");
+    if (i < 0 || !setup.inPlay.includes(id) || !GOOD(BY_ID[id].team)) return setup;
+    const info = setup.info.slice();
+    info[i] = Object.assign({}, info[i], { redHerring: id });
+    return Object.assign({}, setup, { info });
+  }
+
   function reminderList(setup) {
     const out = [];
     for (const id of [...setup.inPlay, setup.decoy].filter(Boolean)) {
@@ -501,7 +530,7 @@ var BOTC = (function () {
       if (p(r.id) === "exclude" && s.inPlay.includes(r.id)) e.push("excluded in play " + r.id);
     }
     if (s.inPlay.includes("drunk")) {
-      if (!s.decoy || BY_ID[s.decoy].team !== "townsfolk" || s.inPlay.includes(s.decoy) || p(s.decoy) === "exclude") e.push("decoy");
+      if (!s.decoy || BY_ID[s.decoy].team !== "townsfolk" || s.inPlay.includes(s.decoy) || p(s.decoy) === "exclude" || !s.decoyPool.includes(s.decoy)) e.push("decoy");
     } else if (s.decoy) e.push("decoy without drunk");
     if (s.bag.length !== s.real || s.bag.includes("drunk") || (s.decoy && !s.bag.includes(s.decoy)) || new Set(s.bag).size !== s.bag.length) e.push("bag");
     if (s.real >= 7) {
@@ -567,7 +596,7 @@ var BOTC = (function () {
     return L.join("\n");
   }
 
-  return { ROLES, BY_ID, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, checkSetup, toText, infoLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural };
+  return { ROLES, BY_ID, TEAMS, TEAM_LABEL, DIST, GOOD, analyze, generate, repick, setDecoy, setRedHerring, checkSetup, toText, infoLine, seatNotes, charLabel, cryptoRng, seededRng, prefOf, plural };
 })();
 /*CORE-END*/
 </script>
@@ -712,9 +741,15 @@ var BOTC = (function () {
         return `<div class="ch ${B.GOOD(t) ? "" : "evil"}"><span class="nm"><b>${esc(r.name)}</b>${tags}</span><span class="ab">${esc(r.ability)}</span>${extra}</div>`;
       }).join("") : `<span class="muted">None this game</span>`}</div>`;
 
+    const select = (set, label, value, ids, text) => `<select data-set="${set}" aria-label="${esc(label)}">${ids.map(id => `<option value="${id}"${id === value ? " selected" : ""}>${esc(text(id))}</option>`).join("")}</select>`;
     const prep = [];
-    if (s.decoy) prep.push({ who: "Drunk", text: `Place IS THE DRUNK on the ${B.BY_ID[s.decoy].name} player.`, note: "Wake them as that Townsfolk. You may give them false info." });
-    s.info.forEach(i => { const l = B.infoLine(s, i); prep.push(Object.assign({ key: i.key }, l)); });
+    if (s.decoy) prep.push({ who: "Drunk", text: `Place IS THE DRUNK on the ${B.BY_ID[s.decoy].name} player.`, note: "Wake them as that Townsfolk. You may give them false info.",
+      ctl: s.decoyPool.length > 1 ? select("decoy", "Character the Drunk thinks they are", s.decoy, s.decoyPool, id => "Thinks: " + B.BY_ID[id].name) : "" });
+    s.info.forEach(i => {
+      const l = B.infoLine(s, i);
+      const ctl = i.key === "fortuneteller" ? select("redherring", "Red Herring", i.redHerring, s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team)), id => B.charLabel(s, id)) : "";
+      prep.push(Object.assign({ key: i.key, ctl }, l));
+    });
     B.seatNotes(s).forEach(n => prep.push(n));
 
     el.innerHTML = `
@@ -733,7 +768,7 @@ var BOTC = (function () {
         ${s.decoy ? `<p class="muted">Dashed: the Drunk's decoy. The Drunk token stays out of the bag.</p>` : ""}</div>
       ${s.travellers ? `<div class="block"><h3>Travellers · ${s.travellers}</h3><p class="muted">Recommended: Scapegoat, Gunslinger, Beggar, Bureaucrat, Thief. They choose; you set alignment.</p></div>` : ""}
       <div class="block"><h3>Demon bluffs</h3>${s.bluffs.length ? `<div class="chips">${s.bluffs.map(id => chip(id)).join("")}</div>` : `<p class="muted">None: with 5–6 players the Demon gets no bluffs and Minion and Demon don't learn each other.</p>`}</div>
-      ${prep.length ? `<div class="block"><h3>First-night prep</h3><ul class="prep">${prep.map(x => `<li><span><span class="who">${esc(x.who)}</span> ${esc(x.text)}${x.note ? `<span class="note">${esc(x.note)}</span>` : ""}</span>${x.key ? `<button type="button" class="btn small" data-repick="${x.key}" aria-label="Re-pick ${esc(x.who)}">Re-pick</button>` : ""}</li>`).join("")}</ul></div>` : ""}
+      ${prep.length ? `<div class="block"><h3>First-night prep</h3><ul class="prep">${prep.map(x => `<li><span><span class="who">${esc(x.who)}</span> ${esc(x.text)}${x.note ? `<span class="note">${esc(x.note)}</span>` : ""}</span>${x.ctl || x.key ? `<span class="ctl">${x.ctl || ""}${x.key ? `<button type="button" class="btn small" data-repick="${x.key}" aria-label="Re-pick ${esc(x.who)}">Re-pick</button>` : ""}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
       ${s.reminders.length ? `<div class="block"><h3>Reminder tokens to pull</h3><div class="chips">${s.reminders.map(r => `<span class="chip">${esc(r.name)}${r.decoy ? " (Drunk)" : ""}: ${esc(r.tokens.join(", "))}</span>`).join("")}</div></div>` : ""}
       <div class="block"><h3>Night order</h3><div class="nights">
         <div><p class="muted" style="margin-bottom:6px"><b>First night</b></p><ol><li class="sys">Dusk</li>${s.firstNight.map(r => `<li class="${r.sys ? "sys" : ""}">${esc(r.label)}<span class="note">${esc(r.note)}</span></li>`).join("")}<li class="sys">Dawn</li></ol></div>
@@ -742,6 +777,10 @@ var BOTC = (function () {
 
     $("reroll").addEventListener("click", () => { if (B.analyze(state).ok) run(); });
     $("copy").addEventListener("click", copyText);
+    el.querySelectorAll("select[data-set]").forEach(sel => sel.addEventListener("change", () => {
+      result = sel.dataset.set === "decoy" ? B.setDecoy(result, sel.value) : B.setRedHerring(result, sel.value);
+      renderResult(cfgKey() !== staleKey);
+    }));
     el.querySelectorAll("[data-repick]").forEach(b => b.addEventListener("click", () => { result = B.repick(result, b.dataset.repick); renderResult(cfgKey() !== staleKey); }));
   }
 

@@ -80,6 +80,39 @@ function expect(name, cond) { if (!cond) fail(name); else console.log("ok  ", na
 { let all = true; for (let i = 0; i < 300; i++) { const r = g({ players: 9, pref: { drunk: "include", fortuneteller: "include" } }); const s = r.setup; all = all && s.decoy && s.bag.includes(s.decoy) && !s.bag.includes("drunk") && !s.bluffs.includes(s.decoy) && (!(B.BY_ID[s.decoy].first || B.BY_ID[s.decoy].other) || s.firstNight.concat(s.otherNights).some(x => x.drunk)) && !s.firstNight.concat(s.otherNights).some(x => x.id === "drunk"); } expect("Drunk decoy in bag, not a bluff, wakes in night order", all); }
 { let rhFT = 0, rhOther = 0; for (let i = 0; i < 2000; i++) { const r = g({ players: 8, pref: { fortuneteller: "include" } }); const rh = r.setup.info.find(x => x.key === "fortuneteller").redHerring; if (rh === "fortuneteller") rhFT++; else rhOther++; } expect("Red Herring can be the Fortune Teller", rhFT > 0 && rhOther > 0); }
 { const r = g({ players: 8, pref: { fortuneteller: "include" } }); const s2 = B.repick(r.setup, "fortuneteller", rng); expect("Re-pick keeps characters", JSON.stringify(s2.inPlay) === JSON.stringify(r.setup.inPlay) && B.checkSetup(s2, { players: 8, pref: { fortuneteller: "include" } }).length === 0); }
+{
+  // Storyteller sets the Drunk's character: every option in the pool gives a valid setup
+  let all = true, tried = 0, swappedBluff = false, newInfo = false;
+  for (let n = 5; n <= 15 && all; n++) for (let i = 0; i < 60 && all; i++) {
+    const cfg = { players: n, pref: Object.assign(randomPref(10), { drunk: "include" }) };
+    if (!B.analyze(cfg).ok) continue;
+    const r = g(cfg); if (!r.ok) continue;
+    for (const id of r.setup.decoyPool) {
+      const s = B.setDecoy(r.setup, id, rng); tried++;
+      if (r.setup.bluffs.includes(id)) swappedBluff = true;
+      if (s.info.length !== r.setup.info.length) newInfo = true;
+      all = all && s.decoy === id && B.checkSetup(s, cfg).length === 0 && JSON.stringify(s.inPlay) === JSON.stringify(r.setup.inPlay)
+        && s.info.filter(x => x.drunk).every(x => x.key === id) && s.firstNight.concat(s.otherNights).filter(x => x.drunk).every(x => x.id === id);
+      if (!all) fail("setDecoy", { cfg, id, problems: B.checkSetup(s, cfg) });
+    }
+  }
+  expect(`Set the Drunk's character (${tried} swaps, bluff swapped: ${swappedBluff}, info changed: ${newInfo})`, all && tried > 0 && swappedBluff && newInfo);
+  const r = g({ players: 8, pref: { drunk: "include", chef: "exclude" } });
+  expect("setDecoy ignores in-play or excluded Townsfolk", B.setDecoy(r.setup, r.setup.townsfolk[0], rng) === r.setup && B.setDecoy(r.setup, "chef", rng) === r.setup);
+  const plain = g({ players: 8, pref: { drunk: "exclude" } });
+  expect("setDecoy does nothing without a Drunk", B.setDecoy(plain.setup, "chef", rng) === plain.setup);
+}
+{
+  // Storyteller sets the Red Herring: any good player in play, never evil
+  const cfg = { players: 12, pref: { fortuneteller: "include" } };
+  const r = g(cfg);
+  const good = r.setup.inPlay.filter(id => B.GOOD(B.BY_ID[id].team));
+  const all = good.every(id => { const s = B.setRedHerring(r.setup, id); return s.info.find(x => x.key === "fortuneteller").redHerring === id && B.checkSetup(s, cfg).length === 0; });
+  expect("Set the Red Herring to any good player", all);
+  expect("Red Herring can't be evil", r.setup.minions.concat("imp").every(id => B.setRedHerring(r.setup, id) === r.setup));
+  const noFT = g({ players: 8, pref: { fortuneteller: "exclude" } });
+  expect("setRedHerring does nothing without a Fortune Teller", B.setRedHerring(noFT.setup, noFT.setup.townsfolk[0]) === noFT.setup);
+}
 
 // 3. Fairness: Townsfolk frequency at 10 players, all Auto
 {
