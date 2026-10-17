@@ -50,6 +50,8 @@ docs/research.md              Trouble Brewing rules research
 docs/implementation-plan.md   design and decisions
 docs/research-bmr.md          Bad Moon Rising rules research
 docs/implementation-plan-bmr.md  plan for adding Bad Moon Rising
+docs/research-snv.md          Sects & Violets rules research
+docs/implementation-plan-snv.md  plan for adding Sects & Violets
 .github/workflows/pages.yml   test + deploy to GitHub Pages
 ```
 
