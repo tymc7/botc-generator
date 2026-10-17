@@ -10,6 +10,7 @@ A Storyteller tool for *Blood on the Clocktower*. Pick a player count, pin chara
 - **Choose characters:** mark each one **In** (always appears), **Auto** (may appear) or **Out** (never appears). If your choices can't fit, Generate is disabled and a message explains the fix.
 - **Setup rules:** the Baron (+2 Outsiders) and the Drunk (a decoy Townsfolk goes in the bag) are handled automatically. The Baron is added for you when it's the only way your choices fit.
 - **Each setup lists:** characters in play, the exact tokens for the bag, Demon bluffs, first-night prep (Red Herring, Washerwoman/Librarian/Investigator info), reminder tokens, and the night order.
+- **Storyteller overrides:** after generating, choose which Townsfolk the Drunk thinks they are (from the spare, non-excluded Townsfolk) and which good player is the Fortune Teller's Red Herring. The bag, bluffs, first-night info and night order update to match.
 - **Re-roll** keeps your choices. **Copy as text** gives you the setup for your notes.
 
 Everything runs in the browser in a single `index.html`, with no build step and no server. Your choices are remembered in your browser.
