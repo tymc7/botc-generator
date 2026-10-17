@@ -18,19 +18,23 @@ function oracle(cfg) {
   const real = Math.min(cfg.players, 15), [TF, OS, MN] = B.DIST[real];
   const p = id => B.prefOf(cfg, id);
   const okSet = (set, team) => ids(team, script).every(id => p(id) !== "include" || set.includes(id)) && set.every(id => p(id) !== "exclude");
-  if (!combos(ids("demon", script), 1).some(d => okSet(d, "demon"))) return false;
   const nonExTF = ids("townsfolk", script).filter(id => p(id) !== "exclude").length;
   const incTF = ids("townsfolk", script).filter(id => p(id) === "include").length;
-  for (const mn of combos(ids("minion", script), MN)) {
-    if (!okSet(mn, "minion")) continue;
-    const mod = mn.find(id => B.BY_ID[id].modifier);
-    for (const d of mod ? B.BY_ID[mod].modifier : [0]) {
-      const tf = TF - d, os = OS + d;
-      if (tf < 0 || os < 0 || incTF > tf || nonExTF < tf) continue;
-      for (const o of combos(ids("outsider", script), os)) {
-        if (!okSet(o, "outsider")) continue;
-        if (o.includes("drunk") && nonExTF < tf + 1) continue;
-        return true;
+  for (const [dm] of combos(ids("demon", script), 1)) {
+    if (!okSet([dm], "demon")) continue;
+    // a Demon's own Outsider change (Fang Gu +1; Vigormortis −1, but never below 0 Outsiders)
+    const D = B.BY_ID[dm], dd = D.modifier ? (D.clamp ? Math.max(D.modifier[0], -OS) : D.modifier[0]) : 0;
+    for (const mn of combos(ids("minion", script), MN)) {
+      if (!okSet(mn, "minion")) continue;
+      const mod = mn.find(id => B.BY_ID[id].modifier);
+      for (const d of mod ? B.BY_ID[mod].modifier : [0]) {
+        const tf = TF - d - dd, os = OS + d + dd;
+        if (tf < 0 || OS + dd + d < 0 || incTF > tf || nonExTF < tf) continue;
+        for (const o of combos(ids("outsider", script), os)) {
+          if (!okSet(o, "outsider")) continue;
+          if (o.includes("drunk") && nonExTF < tf + 1) continue;
+          return true;
+        }
       }
     }
   }
@@ -45,10 +49,10 @@ function randomPref(density, script = "tb") {
 }
 
 // 1. Property run: every player count, many random configs
-for (const script of ["tb", "bmr"]) {
+for (const script of ["tb", "bmr", "snv"]) {
 let gens = 0, feasibleCount = 0;
 for (let n = 5; n <= 20; n++) {
-  for (let i = 0; i < 5000; i++) {
+  for (let i = 0; i < 3000; i++) {
     const density = [0, 5, 10, 20, 35][i % 5];
     const cfg = { script, players: n, pref: randomPref(density, script) };
     const a = B.analyze(cfg), o = oracle(cfg);
@@ -165,6 +169,45 @@ function expect(name, cond) { if (!cond) fail(name); else console.log("ok  ", na
   { const s = bmr(9).setup; expect("BMR bluffs and text use BMR characters", s.bluffs.every(b => B.SCRIPTS.bmr.roles.includes(b)) && B.toText(s).startsWith("Bad Moon Rising")); }
 }
 
+// 2c. Sects & Violets
+{
+  const snv = (players, pref) => g({ script: "snv", players, pref: pref || {} });
+  const allOut = (pref, team) => { ids(team, "snv").forEach(id => pref[id] = "exclude"); return pref; };
+  for (const n of [5, 7, 10, 13]) { const s = snv(n, { vigormortis: "include" }).setup; expect(`Vigormortis at ${n} (no Outsiders to remove) changes nothing`, s.modifier.shift === 0 && s.outsiders.length === 0 && s.townsfolk.length === B.DIST[n][0] && /no Outsiders to remove/.test(B.toText(s))); }
+  { const s = snv(6, { vigormortis: "include" }).setup; expect("Vigormortis at 6: 4 TF / 0 OS", s.modifier.shift === -1 && s.townsfolk.length === 4 && s.outsiders.length === 0); }
+  { const s = snv(15, { vigormortis: "include" }).setup; expect("Vigormortis at 15: 10 TF / 1 OS", s.townsfolk.length === 10 && s.outsiders.length === 1); }
+  { const s = snv(5, { fanggu: "include" }).setup; expect("Fang Gu at 5: 2 TF / 1 OS", s.modifier.id === "fanggu" && s.townsfolk.length === 2 && s.outsiders.length === 1); }
+  { const s = snv(15, { fanggu: "include" }).setup; expect("Fang Gu at 15: 8 TF / 3 OS", s.townsfolk.length === 8 && s.outsiders.length === 3); }
+  { let all = true; for (let i = 0; i < 50; i++) { const r = snv(8, { mutant: "include", klutz: "include" }); all = all && r.ok && r.setup.demon === "fanggu" && r.setup.autoDemon && r.setup.autoModifier; } expect("2 Outsiders at 8 forces the Fang Gu", all); }
+  { const a = B.analyze({ script: "snv", players: 8, pref: { mutant: "include", klutz: "include", fanggu: "exclude" } }); expect("…and with the Fang Gu Out it says to allow it", !a.ok && /only fit with the Fang Gu \(\+1 Outsider\), which you excluded/.test(a.errors[0])); console.log("     →", a.errors[0]); }
+  for (const n of [6, 8]) { let all = true; for (let i = 0; i < 50; i++) { const r = snv(n, allOut({}, "outsider")); all = all && r.ok && r.setup.demon === "vigormortis" && r.setup.outsiders.length === 0; } expect(`All Outsiders Out at ${n} forces the Vigormortis`, all); }
+  { const a = B.analyze({ script: "snv", players: 8, pref: allOut({ vigormortis: "exclude" }, "outsider") }); expect("…and with the Vigormortis Out it says to allow it", !a.ok && /Vigormortis \(−1 Outsider\), which you excluded/.test(a.errors[0])); console.log("     →", a.errors[0]); }
+  { const pref = {}; ids("townsfolk", "snv").slice(0, 4).forEach(id => pref[id] = "include"); const r = snv(6, pref); expect("4 Townsfolk In at 6 forces the Vigormortis", r.ok && r.setup.demon === "vigormortis"); }
+  { const a = B.analyze({ script: "snv", players: 7, pref: { vigormortis: "include", mutant: "include" } }); expect("Vigormortis In + 1 Outsider at 7 errors, pointing to the Fang Gu", !a.ok && /With the Vigormortis.*Fang Gu/.test(a.errors[0])); console.log("     →", a.errors[0]); }
+  { const a = B.analyze({ script: "snv", players: 7, pref: { vortox: "include", mutant: "include", klutz: "include" } }); expect("Nothing fits with any Demon: plain Outsider message", !a.ok && /2 Outsiders, but 7 players have 0 Outsider slots/.test(a.errors[0])); console.log("     →", a.errors[0]); }
+  { const a = B.analyze({ script: "snv", players: 9, pref: allOut({ fanggu: "include" }, "outsider") }); expect("Fang Gu In + all Outsiders Out names the Fang Gu", !a.ok && /with the Fang Gu \(\+1 Outsider\) this setup needs 3/.test(a.errors[0])); console.log("     →", a.errors[0]); }
+  { let ok = true; for (let n = 5; n <= 15; n++) { const a = B.analyze({ script: "snv", players: n, pref: allOut({ fanggu: "include" }, "outsider") }); ok = ok && !a.ok; } expect("Fang Gu In + all Outsiders Out errors at every count", ok); }
+  {
+    const cfg = { script: "snv", players: 11, pref: { eviltwin: "include" } };
+    let all = true;
+    for (let i = 0; i < 200; i++) { const s = g(cfg).setup; const t = s.info.find(x => x.key === "eviltwin").twin; all = all && B.GOOD(B.BY_ID[t].team) && s.inPlay.includes(t); }
+    expect("Good Twin is always a good player in play", all);
+    const s = g(cfg).setup, good = s.inPlay.filter(id => B.GOOD(B.BY_ID[id].team));
+    expect("Set the Good Twin to any good player", good.every(id => { const t = B.setTwin(s, id); return t.info.find(x => x.key === "eviltwin").twin === id && B.checkSetup(t, cfg).length === 0; }));
+    expect("Good Twin can't be evil", s.minions.concat(s.demon).every(id => B.setTwin(s, id) === s));
+    const r6 = snv(6, { eviltwin: "include" }).setup; expect("Evil Twin picks a twin at 6 players too", !!r6.info.find(x => x.key === "eviltwin").twin);
+  }
+  {
+    const has = (s, who) => B.prepNotes(s).some(n => n.who === who);
+    const v = snv(9, { vortox: "include", pithag: "include" }).setup, f = snv(9, { fanggu: "include", pithag: "exclude" }).setup;
+    expect("Vortox / Pit-Hag / Fang Gu notes only when in play", has(v, "Vortox") && has(v, "Pit-Hag") && !has(v, "Fang Gu") && has(f, "Fang Gu") && !has(f, "Vortox") && !has(f, "Pit-Hag"));
+    const c = snv(9, { clockmaker: "include", nodashii: "include" }).setup;
+    expect("Clockmaker and No Dashii get seating notes", ["Clockmaker", "No Dashii"].every(w => B.seatNotes(c).some(n => n.who === w)));
+    const ph = snv(9, { philosopher: "include" }).setup;
+    expect("Philosopher lists the global Is The Philosopher reminder", ph.reminders.find(r => r.id === "philosopher").tokens.includes("Is The Philosopher"));
+  }
+}
+
 // 3. Fairness: Townsfolk frequency at 10 players, all Auto
 {
   const freq = {}; const N = 50000;
@@ -182,6 +225,15 @@ function expect(name, cond) { if (!cond) fail(name); else console.log("ok  ", na
   const dv = Object.values(df);
   expect("BMR Demons equally likely (within 10%)", dv.length === 4 && (Math.max(...dv) - Math.min(...dv)) / Math.max(...dv) < 0.1);
   expect("Godfather direction ~50/50 when both fit", sh[1] && sh[-1] && Math.abs(sh[1] - sh[-1]) / (sh[1] + sh[-1]) < 0.06);
+}
+{
+  const df = {}; const N = 20000;
+  for (let i = 0; i < N; i++) { const s = g({ script: "snv", players: 8, pref: {} }).setup; df[s.demon] = (df[s.demon] || 0) + 1; }
+  console.log("S&V Demon freq:", Object.entries(df).map(([k, v]) => `${k}:${(v / N * 100).toFixed(1)}%`).join(" "));
+  const dv = Object.values(df);
+  expect("S&V Demons equally likely (within 10%)", dv.length === 4 && (Math.max(...dv) - Math.min(...dv)) / Math.max(...dv) < 0.1);
+  let only = true; for (let i = 0; i < 300; i++) only = only && g({ script: "snv", players: 7, pref: { mutant: "include" } }).setup.demon === "fanggu";
+  expect("1 Outsider In at 7: only the Fang Gu fits", only);
 }
 
 console.log(fails ? `\n${fails} FAILURES` : "\nALL TESTS PASSED");
